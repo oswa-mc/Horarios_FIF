@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, field_validator
+from pydantic import BaseModel, HttpUrl, field_validator, model_validator
 from typing import Optional, List
 import re
 
@@ -63,6 +63,20 @@ class EventoCreate(BaseModel):
     hora_inicio: str
     hora_fin: str
     id_espacio: int
+
+    @model_validator(mode="after")
+    def validate_duracion(self):
+        try:
+            h_ini, m_ini = map(int, self.hora_inicio[:5].split(':'))
+            h_fin, m_fin = map(int, self.hora_fin[:5].split(':'))
+            duracion = (h_fin * 60 + m_fin) - (h_ini * 60 + m_ini)
+            if duracion < 30:
+                raise ValueError("El evento debe tener una duracion minima de 30 minutos.")
+        except ValueError as e:
+            raise e
+        except Exception:
+            pass
+        return self
 
 class EventoStatusUpdate(BaseModel):
     estado_evento: str

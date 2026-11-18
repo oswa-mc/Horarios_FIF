@@ -32,7 +32,12 @@ def get_clases_docente(id_usuario: int, current_user: dict = Depends(get_current
             e.tipo as tipo_espacio,
             COUNT(DISTINCT ca.id_alumno) as total_alumnos,
             COALESCE(rec.estado, 'normal') as estado,
-            rec.enlace_virtual,
+            COALESCE(
+                rec.enlace_virtual,
+                (SELECT r_sub.enlace_virtual FROM registro_estado_clase r_sub 
+                 WHERE r_sub.id_clase = cp.id_clase AND r_sub.enlace_virtual IS NOT NULL AND r_sub.enlace_virtual != '' 
+                 ORDER BY r_sub.id_estado_clase DESC LIMIT 1)
+            ) as enlace_virtual,
             rec.observaciones,
             rec.fecha as fecha_estado
         FROM clase_programada cp
@@ -79,13 +84,22 @@ def actualizar_estado_clase(id_clase: int, payload: EstadoClaseUpdate, current_u
         if not payload.enlace_virtual or not (payload.enlace_virtual.startswith("http://") or payload.enlace_virtual.startswith("https://")):
             raise HTTPException(status_code=400, detail="Debe proporcionar un enlace web valido (iniciado con http:// o https://) para sesiones virtuales")
 
+    enlace_a_guardar = payload.enlace_virtual.strip() if payload.enlace_virtual else None
+    if not enlace_a_guardar and payload.estado != "cancelada":
+        prev = query_one(
+            "SELECT enlace_virtual FROM registro_estado_clase WHERE id_clase = %s AND enlace_virtual IS NOT NULL AND enlace_virtual != '' ORDER BY id_estado_clase DESC LIMIT 1",
+            (id_clase,)
+        )
+        if prev and prev.get("enlace_virtual"):
+            enlace_a_guardar = prev["enlace_virtual"]
+
     insert_sql = """
         INSERT INTO registro_estado_clase (id_clase, fecha, estado, enlace_virtual, observaciones)
         VALUES (%s, %s, %s, %s, %s)
     """
     new_id = execute_write(
         insert_sql,
-        (id_clase, payload.fecha, payload.estado, payload.enlace_virtual if payload.estado == "virtual" else None, payload.observaciones)
+        (id_clase, payload.fecha, payload.estado, enlace_a_guardar, payload.observaciones)
     )
 
     return {
@@ -93,7 +107,7 @@ def actualizar_estado_clase(id_clase: int, payload: EstadoClaseUpdate, current_u
         "id_estado_clase": new_id,
         "id_clase": id_clase,
         "estado": payload.estado,
-        "enlace_virtual": payload.enlace_virtual,
+        "enlace_virtual": enlace_a_guardar,
         "observaciones": payload.observaciones,
         "fecha": payload.fecha
     }

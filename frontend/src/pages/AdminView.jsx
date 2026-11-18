@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import ModalEspaciosDisponibles from '../components/ModalEspaciosDisponibles';
+import {
+  ClipboardCheckIcon,
+  InboxIcon,
+  BuildingIcon,
+  BellIcon,
+  AlertTriangleIcon,
+  UsersIcon,
+  SearchIcon,
+  FilterIcon,
+  CheckCircleIcon
+} from '../components/Icons';
 
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
 
@@ -13,6 +24,10 @@ export default function AdminView({ user, targetTabTrigger }) {
   const [materias, setMaterias] = useState([]);
   const [docentes, setDocentes] = useState([]);
   const [espacios, setEspacios] = useState([]);
+
+  // Filtros de clases
+  const [filtroMateriaAdmin, setFiltroMateriaAdmin] = useState('');
+  const [busquedaClaseAdmin, setBusquedaClaseAdmin] = useState('');
 
   // Formulario nueva clase
   const [nuevaClase, setNuevaClase] = useState({
@@ -101,7 +116,7 @@ export default function AdminView({ user, targetTabTrigger }) {
         periodo_lectivo: nuevaClase.periodo_lectivo,
       });
 
-      setClaseSuccess('✓ Clase programada con exito sin empalmes.');
+      setClaseSuccess('Clase programada con exito sin empalmes.');
       // Recargar clases y espacios
       const [nuevasClases, nuevosEspacios] = await Promise.all([
         api.getAdminClases(),
@@ -125,7 +140,7 @@ export default function AdminView({ user, targetTabTrigger }) {
 
   // Eliminar clase
   const handleEliminarClase = async (idClase) => {
-    if (!window.confirm("¿Estas seguro de que deseas eliminar esta clase programada?")) return;
+    if (!window.confirm("Estas seguro de que deseas eliminar esta clase programada?")) return;
     try {
       await api.eliminarClase(idClase);
       setClases((prev) => prev.filter((c) => c.id_clase !== idClase));
@@ -152,6 +167,24 @@ export default function AdminView({ user, targetTabTrigger }) {
     setModalDisponiblesAbierto(true);
   };
 
+  // Filtrado de clases
+  const clasesFiltradas = clases.filter((c) => {
+    if (filtroMateriaAdmin && String(c.id_materia) !== String(filtroMateriaAdmin)) {
+      return false;
+    }
+    if (busquedaClaseAdmin.trim()) {
+      const q = busquedaClaseAdmin.toLowerCase();
+      const matchMateria = c.nombre_materia?.toLowerCase().includes(q);
+      const matchClave = c.clave_materia?.toLowerCase().includes(q);
+      const matchDocente = c.nombre_docente?.toLowerCase().includes(q);
+      const matchEspacio = c.nombre_espacio?.toLowerCase().includes(q);
+      if (!matchMateria && !matchClave && !matchDocente && !matchEspacio) {
+        return false;
+      }
+    }
+    return true;
+  });
+
   return (
     <div className="main-content">
       {/* Tabs Principales de Administracion */}
@@ -159,20 +192,26 @@ export default function AdminView({ user, targetTabTrigger }) {
         <button
           className={`tab-btn ${activeTab === 'programacion' ? 'active' : ''}`}
           onClick={() => setActiveTab('programacion')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
-          📋 Programacion General
+          <ClipboardCheckIcon size={16} />
+          <span>Programacion General</span>
         </button>
         <button
           className={`tab-btn ${activeTab === 'eventos' ? 'active' : ''}`}
           onClick={() => setActiveTab('eventos')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
-          📨 Solicitudes de Eventos ({eventos.filter(e => e.estado_evento === 'pendiente').length} pendientes)
+          <InboxIcon size={16} />
+          <span>Solicitudes de Eventos ({eventos.filter(e => e.estado_evento === 'pendiente').length} pendientes)</span>
         </button>
         <button
           className={`tab-btn ${activeTab === 'espacios' ? 'active' : ''}`}
           onClick={() => setActiveTab('espacios')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
-          🏛️ Espacios Academicos ({espacios.length})
+          <BuildingIcon size={16} />
+          <span>Espacios Academicos ({espacios.length})</span>
         </button>
       </div>
 
@@ -183,8 +222,9 @@ export default function AdminView({ user, targetTabTrigger }) {
           {eventos.filter((e) => e.estado_evento === 'pendiente').length > 0 && (
             <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '14px 18px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div>
-                <strong style={{ color: '#1E40AF', fontSize: '0.95rem' }}>
-                  🔔 Solicitudes de Eventos Pendientes ({eventos.filter((e) => e.estado_evento === 'pendiente').length})
+                <strong style={{ color: '#1E40AF', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <BellIcon size={18} />
+                  <span>Solicitudes de Eventos Pendientes ({eventos.filter((e) => e.estado_evento === 'pendiente').length})</span>
                 </strong>
                 <div style={{ fontSize: '0.82rem', color: '#475569', marginTop: '2px' }}>
                   Hay propuestas de alumnos y docentes esperando tu revision y aprobacion.
@@ -210,22 +250,19 @@ export default function AdminView({ user, targetTabTrigger }) {
             </p>
 
             {claseError && (
-              <div className="error-banner" style={{ marginBottom: '18px' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
+              <div className="error-banner" style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <AlertTriangleIcon size={20} />
                 <div style={{ flex: 1 }}>
-                  <strong>¡Empalme Rechazado (Codigo 409 Conflict)!</strong>
+                  <strong>Empalme Rechazado (Codigo 409 Conflict):</strong>
                   <div>{claseError}</div>
                 </div>
               </div>
             )}
 
             {claseSuccess && (
-              <div style={{ background: '#DCFCE7', color: '#16A34A', padding: '12px', borderRadius: '8px', marginBottom: '18px', fontWeight: '700' }}>
-                {claseSuccess}
+              <div style={{ background: '#DCFCE7', color: '#16A34A', padding: '12px', borderRadius: '8px', marginBottom: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircleIcon size={18} />
+                <span>{claseSuccess}</span>
               </div>
             )}
 
@@ -332,12 +369,62 @@ export default function AdminView({ user, targetTabTrigger }) {
             </form>
           </div>
 
-          {/* Tabla de clases programadas */}
+          {/* Tabla de clases programadas con filtro por materia y busqueda */}
           <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '800' }}>
-                Clases Programadas en el Sistema ({clases.length})
-              </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: '800' }}>
+                  Clases Programadas en el Sistema ({clasesFiltradas.length}{clasesFiltradas.length !== clases.length ? ` de ${clases.length}` : ''})
+                </h3>
+                <p style={{ color: '#64748B', fontSize: '0.85rem' }}>
+                  Filtra por materia o busca por docente, aula o clave.
+                </p>
+              </div>
+
+              {/* Barra de filtros de clases */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FilterIcon size={16} />
+                  <select
+                    className="form-control"
+                    style={{ width: 'auto', minWidth: '180px', padding: '6px 10px', fontSize: '0.85rem' }}
+                    value={filtroMateriaAdmin}
+                    onChange={(e) => setFiltroMateriaAdmin(e.target.value)}
+                  >
+                    <option value="">Todas las Materias ({materias.length})</option>
+                    {materias.map((m) => (
+                      <option key={m.id_materia} value={m.id_materia}>
+                        {m.clave_materia} - {m.nombre_materia}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <SearchIcon size={16} />
+                  <input
+                    type="text"
+                    className="form-control"
+                    style={{ width: '180px', padding: '6px 10px', fontSize: '0.85rem' }}
+                    placeholder="Buscar clase..."
+                    value={busquedaClaseAdmin}
+                    onChange={(e) => setBusquedaClaseAdmin(e.target.value)}
+                  />
+                </div>
+
+                {(filtroMateriaAdmin || busquedaClaseAdmin) && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setFiltroMateriaAdmin('');
+                      setBusquedaClaseAdmin('');
+                    }}
+                  >
+                    Limpiar Filtro
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="table-container">
@@ -355,26 +442,38 @@ export default function AdminView({ user, targetTabTrigger }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {clases.map((c) => (
-                    <tr key={c.id_clase}>
-                      <td style={{ textTransform: 'capitalize', fontWeight: '700' }}>{c.dia_semana}</td>
-                      <td>{c.hora_inicio} - {c.hora_fin}</td>
-                      <td><span className="badge badge-normal">{c.clave_materia}</span></td>
-                      <td style={{ fontWeight: '600' }}>{c.nombre_materia}</td>
-                      <td>{c.nombre_docente}</td>
-                      <td>{c.nombre_espacio}</td>
-                      <td>👥 {c.total_alumnos}</td>
-                      <td>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleEliminarClase(c.id_clase)}
-                          title="Eliminar clase"
-                        >
-                          Eliminar
-                        </button>
+                  {clasesFiltradas.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" style={{ textAlign: 'center', padding: '24px', color: '#64748B' }}>
+                        No se encontraron clases con los filtros seleccionados.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    clasesFiltradas.map((c) => (
+                      <tr key={c.id_clase}>
+                        <td style={{ textTransform: 'capitalize', fontWeight: '700' }}>{c.dia_semana}</td>
+                        <td>{c.hora_inicio} - {c.hora_fin}</td>
+                        <td><span className="badge badge-normal">{c.clave_materia}</span></td>
+                        <td style={{ fontWeight: '600' }}>{c.nombre_materia}</td>
+                        <td>{c.nombre_docente}</td>
+                        <td>{c.nombre_espacio}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <UsersIcon size={14} /> {c.total_alumnos}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleEliminarClase(c.id_clase)}
+                            title="Eliminar clase"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -429,8 +528,9 @@ export default function AdminView({ user, targetTabTrigger }) {
           </div>
 
           {eventoActionError && (
-            <div className="error-banner" style={{ marginBottom: '16px' }}>
-              {eventoActionError}
+            <div className="error-banner" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangleIcon size={18} />
+              <span>{eventoActionError}</span>
             </div>
           )}
 
@@ -494,8 +594,9 @@ export default function AdminView({ user, targetTabTrigger }) {
                         {/* Etiqueta completa y aviso de empalme preventivo */}
                         {isPendiente && hayEmpalme && (
                           <div style={{ marginTop: '6px' }}>
-                            <span className="badge badge-cancelada" style={{ fontSize: '0.7rem' }}>
-                              ⚠️ Empalme detectado
+                            <span className="badge badge-cancelada" style={{ fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <AlertTriangleIcon size={13} />
+                              <span>Empalme detectado</span>
                             </span>
                             <div style={{ fontSize: '0.75rem', color: '#991B1B', marginTop: '4px', maxWidth: '280px' }}>
                               {ev.aviso_conflicto}
@@ -503,33 +604,55 @@ export default function AdminView({ user, targetTabTrigger }) {
                             <button
                               type="button"
                               className="btn btn-secondary btn-sm"
-                              style={{ marginTop: '6px', fontSize: '0.72rem', borderColor: '#F87171', color: '#B91C1C' }}
+                              style={{ marginTop: '6px', fontSize: '0.72rem', borderColor: '#F87171', color: '#B91C1C', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                               onClick={() => abrirModalDisponibles(ev)}
                             >
-                              🔍 Ver espacios disponibles
+                              <SearchIcon size={13} />
+                              <span>Ver espacios disponibles</span>
                             </button>
                           </div>
                         )}
                       </td>
                       <td>
                         {isPendiente ? (
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                             <button
                               className="btn btn-success btn-sm"
+                              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                               onClick={() => handleCambiarEstadoEvento(ev.id_evento, 'aprobado')}
                             >
                               Aprobar
                             </button>
                             <button
                               className="btn btn-danger btn-sm"
+                              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                               onClick={() => handleCambiarEstadoEvento(ev.id_evento, 'rechazado')}
                             >
                               Rechazar
                             </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: '0.75rem', padding: '4px 8px', color: '#B91C1C', borderColor: '#FCA5A5' }}
+                              onClick={() => handleCambiarEstadoEvento(ev.id_evento, 'cancelado')}
+                              title="Cancelar evento"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : ev.estado_evento === 'aprobado' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                              onClick={() => handleCambiarEstadoEvento(ev.id_evento, 'cancelado')}
+                              title="Cancelar evento aprobado"
+                            >
+                              Cancelar Evento
+                            </button>
                           </div>
                         ) : (
                           <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
-                            {ev.nombre_aprobador ? `Por: ${ev.nombre_aprobador}` : 'Finalizado'}
+                            {ev.estado_evento === 'cancelado' ? 'Cancelado' : (ev.nombre_aprobador ? `Por: ${ev.nombre_aprobador}` : 'Finalizado')}
                           </span>
                         )}
                       </td>
@@ -572,8 +695,9 @@ export default function AdminView({ user, targetTabTrigger }) {
                     </span>
                   </div>
 
-                  <div style={{ fontSize: '0.85rem', color: '#64748B', margin: '8px 0 12px' }}>
-                    👥 Capacidad maxima: <strong>{esp.capacidad} personas</strong>
+                  <div style={{ fontSize: '0.85rem', color: '#64748B', margin: '8px 0 12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <UsersIcon size={15} />
+                    <span>Capacidad maxima: <strong>{esp.capacidad} personas</strong></span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#475569' }}>

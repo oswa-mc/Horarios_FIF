@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
+import {
+  CalendarIcon,
+  InboxIcon,
+  BookOpenIcon,
+  BookmarkIcon,
+  ClockIcon,
+  MapPinIcon,
+  UserIcon,
+  VideoIcon,
+  AlertTriangleIcon,
+  FilterIcon
+} from '../components/Icons';
 
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
 
@@ -8,6 +20,7 @@ export default function AlumnoView({ user, targetTabTrigger }) {
   const [clases, setClases] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
   const [filtroEventos, setFiltroEventos] = useState('todos'); // 'todos' | 'mis_solicitudes' | 'comunidad'
+  const [filtroMateria, setFiltroMateria] = useState(''); // Filtrar por clase
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -38,6 +51,18 @@ export default function AlumnoView({ user, targetTabTrigger }) {
       setSolicitudes(data);
     } catch (err) {
       console.error("Error al cargar solicitudes:", err);
+    }
+  };
+
+  const handleCancelarEvento = async (idEvento) => {
+    if (!window.confirm("Estas seguro de que deseas cancelar este evento?")) return;
+    try {
+      await api.cancelarEvento(idEvento);
+      setSolicitudes((prev) =>
+        prev.map((e) => (e.id_evento === idEvento ? { ...e, estado_evento: 'cancelado' } : e))
+      );
+    } catch (err) {
+      alert(err.detail || "Error al cancelar el evento");
     }
   };
 
@@ -76,13 +101,18 @@ export default function AlumnoView({ user, targetTabTrigger }) {
 
   const proximaClase = getProximaClase();
 
-  // Agrupar clases por dia de la semana para la parrilla semanal
+  // Filtrado de clases por materia si el alumno selecciona una clase especifica
+  const clasesFiltradas = filtroMateria
+    ? clases.filter((c) => String(c.id_materia) === String(filtroMateria))
+    : clases;
+
+  // Agrupar clases filtradas por dia de la semana para la parrilla semanal
   const clasesPorDia = DIAS_SEMANA.reduce((acc, dia) => {
-    acc[dia] = clases.filter((c) => c.dia_semana === dia);
+    acc[dia] = clasesFiltradas.filter((c) => c.dia_semana === dia);
     return acc;
   }, {});
 
-  // Extraer lista unica de asignaturas
+  // Extraer lista unica de asignaturas para el filtro y para la pestana de asignaturas
   const asignaturasUnicas = Array.from(
     new Set(clases.map((c) => c.id_materia))
   ).map((id) => clases.find((c) => c.id_materia === id));
@@ -121,19 +151,19 @@ export default function AlumnoView({ user, targetTabTrigger }) {
           className={`tab-btn ${activeTab === 'horario' ? 'active' : ''}`}
           onClick={() => setActiveTab('horario')}
         >
-          📅 Mi Horario Semanal
+          <CalendarIcon size={16} /> Mi Horario Semanal
         </button>
         <button
           className={`tab-btn ${activeTab === 'solicitudes' ? 'active' : ''}`}
           onClick={() => setActiveTab('solicitudes')}
         >
-          📨 Mis Solicitudes de Eventos ({solicitudes.length})
+          <InboxIcon size={16} /> Eventos Comunitarios ({solicitudes.length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'asignaturas' ? 'active' : ''}`}
           onClick={() => setActiveTab('asignaturas')}
         >
-          📚 Asignaturas Inscritas ({asignaturasUnicas.length})
+          <BookOpenIcon size={16} /> Asignaturas Inscritas ({asignaturasUnicas.length})
         </button>
       </div>
 
@@ -143,14 +173,17 @@ export default function AlumnoView({ user, targetTabTrigger }) {
       {proximaClase && activeTab === 'horario' && (
         <div className="next-class-banner">
           <div className="next-class-info">
-            <h3>{proximaClase.esHoy ? '📌 Tu Proxima Clase Hoy' : `📌 Proxima Clase Asignada (${proximaClase.dia_semana.toUpperCase()})`}</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BookmarkIcon size={18} />
+              {proximaClase.esHoy ? 'Tu Proxima Clase Hoy' : `Proxima Clase Asignada (${proximaClase.dia_semana.toUpperCase()})`}
+            </h3>
             <div className="class-title">
               {proximaClase.clave_materia} - {proximaClase.nombre_materia}
             </div>
             <div className="next-class-details">
-              <span>🕒 {proximaClase.hora_inicio} - {proximaClase.hora_fin} hrs</span>
-              <span>📍 {proximaClase.nombre_espacio}</span>
-              <span>👨‍🏫 Prof. {proximaClase.nombre_docente}</span>
+              <span><ClockIcon size={14} /> {proximaClase.hora_inicio} - {proximaClase.hora_fin} hrs</span>
+              <span><MapPinIcon size={14} /> {proximaClase.nombre_espacio}</span>
+              <span><UserIcon size={14} /> Prof. {proximaClase.nombre_docente}</span>
               <span style={{ textTransform: 'capitalize' }}>
                 Estado: <strong>{proximaClase.estado}</strong>
               </span>
@@ -169,9 +202,9 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary"
-                style={{ background: 'white', color: '#1D4ED8', fontWeight: '700', padding: '10px 18px' }}
+                style={{ background: 'white', color: '#1D4ED8', fontWeight: '700', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                📹 Unirse a videollamada
+                <VideoIcon size={16} /> Unirse a videollamada
               </a>
             </div>
           )}
@@ -181,12 +214,45 @@ export default function AlumnoView({ user, targetTabTrigger }) {
       {/* TAB 1: PARRILLA SEMANAL (LUNES A SABADO) */}
       {activeTab === 'horario' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '800' }}>Parrilla Semanal de Clases</h2>
             <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#22C55E', borderRadius: '50%' }}></span>
               Sincronizacion en vivo (cada 3s)
             </div>
+          </div>
+
+          {/* FILTRO POR CLASE / MATERIA */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', background: '#F8FAFC', padding: '10px 16px', borderRadius: '8px', border: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontSize: '0.88rem', fontWeight: '600' }}>
+              <FilterIcon size={16} />
+              <span>Filtrar por clase:</span>
+            </div>
+            <select
+              className="form-control"
+              style={{ maxWidth: '320px', padding: '6px 12px', fontSize: '0.85rem' }}
+              value={filtroMateria}
+              onChange={(e) => setFiltroMateria(e.target.value)}
+            >
+              <option value="">-- Todas las clases asignadas ({asignaturasUnicas.length}) --</option>
+              {asignaturasUnicas.map((m) => (
+                <option key={m.id_materia} value={m.id_materia}>
+                  {m.clave_materia} - {m.nombre_materia}
+                </option>
+              ))}
+            </select>
+            {filtroMateria && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setFiltroMateria('')}
+              >
+                Mostrar todas las clases
+              </button>
+            )}
+            <span style={{ fontSize: '0.8rem', color: '#64748B', marginLeft: 'auto' }}>
+              {clasesFiltradas.length} bloque(s) de clase visible(s)
+            </span>
           </div>
 
           <div className="weekly-grid">
@@ -227,14 +293,15 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                           <div className="class-name">{c.nombre_materia}</div>
 
                           <div className="class-meta">
-                            <span>📍 {c.nombre_espacio}</span>
-                            <span>👨‍🏫 {c.nombre_docente}</span>
+                            <span><MapPinIcon size={13} /> {c.nombre_espacio}</span>
+                            <span><UserIcon size={13} /> {c.nombre_docente}</span>
                           </div>
 
                           {/* Si hay observaciones de cancelacion o reprogramacion */}
                           {c.observaciones && (
-                            <div className="class-notes">
-                              ⚠️ {c.observaciones}
+                            <div className="class-notes" style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                              <AlertTriangleIcon size={14} />
+                              <span>{c.observaciones}</span>
                             </div>
                           )}
 
@@ -245,8 +312,9 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="join-meet-btn"
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                             >
-                              📹 Unirse a videollamada
+                              <VideoIcon size={14} /> Unirse a videollamada
                             </a>
                           )}
                         </div>
@@ -285,14 +353,14 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                 className={`btn btn-sm ${filtroEventos === 'mis_solicitudes' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setFiltroEventos('mis_solicitudes')}
               >
-                Mis Solicitudes ({solicitudes.filter(e => e.id_proponente === user.id_usuario).length})
+                Mis Solicitudes ({solicitudes.filter((e) => e.id_proponente === user.id_usuario).length})
               </button>
               <button
                 type="button"
                 className={`btn btn-sm ${filtroEventos === 'comunidad' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setFiltroEventos('comunidad')}
               >
-                Aprobados Comunidad ({solicitudes.filter(e => e.estado_evento === 'aprobado').length})
+                Aprobados Comunidad ({solicitudes.filter((e) => e.estado_evento === 'aprobado').length})
               </button>
             </div>
           </div>
@@ -312,6 +380,7 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                     <th>Horario</th>
                     <th>Estado</th>
                     <th>Descripcion</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,12 +392,13 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                     })
                     .map((ev) => {
                       const esMio = ev.id_proponente === user.id_usuario;
+                      const puedeCancelar = esMio && ev.estado_evento !== 'cancelado' && ev.estado_evento !== 'rechazado';
                       return (
                         <tr key={ev.id_evento} style={esMio && ev.estado_evento === 'pendiente' ? { background: '#EFF6FF' } : {}}>
                           <td>
                             <div style={{ fontWeight: '700' }}>{ev.titulo}</div>
                             <div style={{ fontSize: '0.78rem', color: esMio ? '#2563EB' : '#64748B', fontWeight: esMio ? '600' : 'normal' }}>
-                              {esMio ? '👤 Mi propuesta' : `Por: ${ev.nombre_proponente} (${ev.rol_proponente})`}
+                              {esMio ? 'Mi propuesta' : `Por: ${ev.nombre_proponente} (${ev.rol_proponente})`}
                             </div>
                           </td>
                           <td>{ev.nombre_espacio} ({ev.tipo_espacio})</td>
@@ -337,6 +407,23 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                           <td>{renderBadgeSolicitud(ev.estado_evento)}</td>
                           <td style={{ color: '#64748B', maxWidth: '300px' }}>
                             {ev.descripcion || 'Sin descripcion'}
+                          </td>
+                          <td>
+                            {puedeCancelar ? (
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-sm"
+                                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                                onClick={() => handleCancelarEvento(ev.id_evento)}
+                                title="Cancelar esta propuesta de evento"
+                              >
+                                Cancelar
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
+                                {ev.estado_evento === 'cancelado' ? 'Cancelado' : '-'}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -352,7 +439,7 @@ export default function AlumnoView({ user, targetTabTrigger }) {
       {activeTab === 'asignaturas' && (
         <div className="card">
           <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '16px' }}>
-            Materias Inscritas — Ciclo Activo
+            Materias Inscritas - Ciclo Activo
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
             {asignaturasUnicas.map((m) => (

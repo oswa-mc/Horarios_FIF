@@ -31,7 +31,12 @@ def get_horario_alumno(id_usuario: int, current_user: dict = Depends(get_current
             u.id_usuario as id_docente,
             u.nombre as nombre_docente,
             COALESCE(rec.estado, 'normal') as estado,
-            rec.enlace_virtual,
+            COALESCE(
+                rec.enlace_virtual,
+                (SELECT r_sub.enlace_virtual FROM registro_estado_clase r_sub 
+                 WHERE r_sub.id_clase = cp.id_clase AND r_sub.enlace_virtual IS NOT NULL AND r_sub.enlace_virtual != '' 
+                 ORDER BY r_sub.id_estado_clase DESC LIMIT 1)
+            ) as enlace_virtual,
             rec.observaciones,
             rec.fecha as fecha_estado
         FROM carga_academica_alumno ca

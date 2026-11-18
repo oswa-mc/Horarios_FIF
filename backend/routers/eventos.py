@@ -144,6 +144,12 @@ def crear_evento(payload: EventoCreate, current_user: dict = Depends(get_current
     if inicio >= fin:
         raise HTTPException(status_code=400, detail="La hora de inicio debe ser anterior a la hora de fin")
 
+    h_ini, m_ini = map(int, inicio[:5].split(':'))
+    h_fin, m_fin = map(int, fin[:5].split(':'))
+    duracion_min = (h_fin * 60 + m_fin) - (h_ini * 60 + m_ini)
+    if duracion_min < 30:
+        raise HTTPException(status_code=400, detail="Los eventos deben tener minimo 30 minutos de duracion")
+
     espacio = query_one("SELECT id_espacio FROM espacio_academico WHERE id_espacio = %s", (payload.id_espacio,))
     if not espacio:
         raise HTTPException(status_code=404, detail="El espacio academico seleccionado no existe")
@@ -206,4 +212,35 @@ def actualizar_estado_evento(id_evento: int, payload: EventoStatusUpdate, curren
         "id_evento": id_evento,
         "estado_evento": nuevo_estado
     }
+
+@router.patch("/{id_evento}/cancelar")
+def cancelar_evento(id_evento: int, current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id_usuario")
+    user_role = current_user.get("rol")
+
+    evento = query_one("SELECT * FROM evento_comunitario WHERE id_evento = %s", (id_evento,))
+    if not evento:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+
+    if evento["id_proponente"] != user_id and user_role != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo la persona que propuso el evento o un administrador pueden cancelarlo"
+        )
+
+    if evento["estado_evento"] == "cancelado":
+        return {
+            "message": "El evento ya se encuentra cancelado",
+            "id_evento": id_evento,
+            "estado_evento": "cancelado"
+        }
+
+    execute_write("UPDATE evento_comunitario SET estado_evento = 'cancelado' WHERE id_evento = %s", (id_evento,))
+
+    return {
+        "message": "Evento cancelado exitosamente",
+        "id_evento": id_evento,
+        "estado_evento": "cancelado"
+    }
+
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api, setSession } from '../api';
+import { GraduationCapIcon, TeacherIcon, ShieldIcon } from '../components/Icons';
 
 export default function Login({ onLoginSuccess }) {
   const [expediente, setExpediente] = useState('');
@@ -10,7 +11,7 @@ export default function Login({ onLoginSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!expediente.trim() || !contrasena) {
-      setErrorMsg('Por favor ingresa tanto tu expediente como tu contraseña.');
+      setErrorMsg('Por favor ingresa tanto tu expediente como tu contrasena.');
       return;
     }
 
@@ -24,7 +25,7 @@ export default function Login({ onLoginSuccess }) {
         onLoginSuccess(data.usuario);
       }
     } catch (err) {
-      setErrorMsg(err.detail || 'Expediente o contraseña incorrectos');
+      setErrorMsg(err.detail || 'Expediente o contrasena incorrectos');
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ export default function Login({ onLoginSuccess }) {
           </div>
 
           <div className="form-group">
-            <label htmlFor="contrasena">Contraseña</label>
+            <label htmlFor="contrasena">Contrasena</label>
             <input
               id="contrasena"
               type="password"
@@ -104,21 +105,21 @@ export default function Login({ onLoginSuccess }) {
               className="pill-btn"
               onClick={() => handleQuickFill('2024001', 'prueba123')}
             >
-              🎓 Alumno (2024001)
+              <GraduationCapIcon size={16} /> Alumno (2024001)
             </button>
             <button
               type="button"
               className="pill-btn"
               onClick={() => handleQuickFill('DOC001', 'prueba123')}
             >
-              👨‍🏫 Docente (DOC001)
+              <TeacherIcon size={16} /> Docente (DOC001)
             </button>
             <button
               type="button"
               className="pill-btn"
               onClick={() => handleQuickFill('ADM001', 'prueba123')}
             >
-              🛡️ Admin (ADM001)
+              <ShieldIcon size={16} /> Admin (ADM001)
             </button>
           </div>
         </div>

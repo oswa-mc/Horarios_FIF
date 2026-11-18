@@ -85,6 +85,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(eventoData),
     }),
+  cancelarEvento: (id_evento) =>
+    request(`/eventos/${id_evento}/cancelar`, {
+      method: 'PATCH',
+    }),
   // PATCH /api/admin/eventos/{id_evento}
   actualizarEstadoEvento: (id_evento, estado_evento) =>
     request(`/admin/eventos/${id_evento}`, {

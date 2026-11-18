@@ -19,7 +19,7 @@ def login(credentials: LoginRequest):
     if not user or not verify_password(credentials.contrasena, user["contrasena"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Expediente o contraseña incorrectos"
+            detail="Expediente o contrasena incorrectos"
         )
     
     token_data = {
