@@ -29,6 +29,18 @@ if not exist "%~dp0backend\venv" (
     echo.
 )
 
+REM Verificacion de MySQL en XAMPP
+set MYSQL_BIN=D:\xampp\mysql\bin\mysql.exe
+if not exist "%MYSQL_BIN%" set MYSQL_BIN=C:\xampp\mysql\bin\mysql.exe
+if not exist "%MYSQL_BIN%" set MYSQL_BIN=mysql
+
+"%MYSQL_BIN%" -h 127.0.0.1 -P 3306 -u root -e "SELECT 1;" >nul 2>&1
+if errorlevel 1 (
+    echo [AVISO] MySQL no parece estar iniciado en el puerto 3306.
+    echo Asegurate de presionar Start en MySQL en el panel de XAMPP.
+    echo.
+)
+
 echo [1/3] Iniciando servidor Backend FastAPI en puerto 8000...
 start "Backend FastAPI (FIF-UAQ)" cmd /k "cd /d %~dp0backend && venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000"
 
