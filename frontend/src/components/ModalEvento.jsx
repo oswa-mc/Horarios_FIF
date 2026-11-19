@@ -11,6 +11,9 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
   const [horaFin, setHoraFin] = useState('');
   const [idEspacio, setIdEspacio] = useState('');
 
+  // Filtro de categoria de espacios en el modal (por defecto 'eventos' para eventos, reuniones, platicas)
+  const [filtroCategoria, setFiltroCategoria] = useState('eventos'); // 'eventos' | 'deportes' | 'clases' | 'todos'
+
   // Estado para la validacion dinamica de disponibilidad
   const [disponibles, setDisponibles] = useState(null);
   const [cargandoDisponibilidad, setCargandoDisponibilidad] = useState(false);
@@ -35,6 +38,7 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
       setHoraInicio('');
       setHoraFin('');
       setIdEspacio('');
+      setFiltroCategoria('eventos');
       setDisponibles(null);
       setCargandoDisponibilidad(false);
       setErrorDisponibilidad('');
@@ -159,11 +163,38 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
   const idsDisponibles = disponibles ? new Set(disponibles.map((d) => d.id_espacio)) : null;
   const espacioSeleccionadoDisponible = idEspacio && idsDisponibles ? idsDisponibles.has(parseInt(idEspacio, 10)) : null;
 
+  // Filtrado de espacios segun categoria seleccionada
+  const espaciosFiltrados = espacios.filter((esp) => {
+    if (filtroCategoria === 'eventos') {
+      return (esp.categoria && esp.categoria.includes('eventos')) || esp.id_espacio === 51 || esp.nombre_espacio.toLowerCase().includes('auditorio') || esp.nombre_espacio.toLowerCase().includes('coliseo') || esp.nombre_espacio.toLowerCase().includes('arco techo') || esp.nombre_espacio.toLowerCase().includes('usos multiples');
+    }
+    if (filtroCategoria === 'deportes') {
+      return (esp.categoria && esp.categoria.includes('deportes')) || esp.tipo === 'deportivo';
+    }
+    if (filtroCategoria === 'clases') {
+      return esp.categoria === 'clases' || esp.tipo === 'aula' || esp.tipo === 'laboratorio';
+    }
+    return true;
+  });
+
+  const disponiblesEnCategoria = disponibles ? disponibles.filter((d) => {
+    if (filtroCategoria === 'eventos') {
+      return (d.categoria && d.categoria.includes('eventos')) || d.id_espacio === 51 || d.nombre_espacio.toLowerCase().includes('auditorio') || d.nombre_espacio.toLowerCase().includes('coliseo') || d.nombre_espacio.toLowerCase().includes('arco techo') || d.nombre_espacio.toLowerCase().includes('usos multiples');
+    }
+    if (filtroCategoria === 'deportes') {
+      return (d.categoria && d.categoria.includes('deportes')) || d.tipo === 'deportivo';
+    }
+    if (filtroCategoria === 'clases') {
+      return d.categoria === 'clases' || d.tipo === 'aula' || d.tipo === 'laboratorio';
+    }
+    return true;
+  }) : [];
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px' }}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px' }}>
         <div className="modal-header">
-          <h3>Proponer Evento Comunitario</h3>
+          <h3>Proponer Evento, Reunion o Platica</h3>
           <button className="close-btn" onClick={onClose} aria-label="Cerrar modal">
             &times;
           </button>
@@ -186,12 +217,12 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
         <form onSubmit={handleSubmit}>
           {/* 1. Titulo del Evento */}
           <div className="form-group">
-            <label htmlFor="titulo">Titulo del Evento *</label>
+            <label htmlFor="titulo">Titulo de la Actividad *</label>
             <input
               id="titulo"
               type="text"
               className="form-control"
-              placeholder="Ej. Taller de Inteligencia Artificial para Estudiantes"
+              placeholder="Ej. Platica de Ciberseguridad, Torneo Deportivo, Taller..."
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               onBlur={() => handleBlur('titulo')}
@@ -203,12 +234,12 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
 
           {/* 2. Descripcion (opcional) */}
           <div className="form-group">
-            <label htmlFor="descripcion">Descripcion y Objetivo del Evento</label>
+            <label htmlFor="descripcion">Descripcion y Proposito</label>
             <textarea
               id="descripcion"
               rows="2"
               className="form-control"
-              placeholder="Detalla los propositos de la actividad, publico objetivo o requerimientos..."
+              placeholder="Detalla los propositos del evento, publico objetivo o requerimientos..."
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
             />
@@ -265,7 +296,7 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
 
           {/* 5. Al final: Espacio Academico Requerido con estado de ocupado o disponible */}
           <div className="form-group" style={{ marginTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
               <label htmlFor="idEspacio" style={{ fontWeight: '700', marginBottom: 0 }}>
                 Espacio Academico Requerido *
               </label>
@@ -274,6 +305,42 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
                   Comprobando disponibilidad...
                 </span>
               )}
+            </div>
+
+            {/* Selector de Categoria para facilitar encontrar el lugar adecuado */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${filtroCategoria === 'eventos' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                onClick={() => setFiltroCategoria('eventos')}
+              >
+                Eventos y Reuniones ({espacios.filter(e => (e.categoria && e.categoria.includes('eventos')) || e.id_espacio === 51 || e.nombre_espacio.toLowerCase().includes('auditorio') || e.nombre_espacio.toLowerCase().includes('coliseo') || e.nombre_espacio.toLowerCase().includes('arco techo') || e.nombre_espacio.toLowerCase().includes('usos multiples')).length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${filtroCategoria === 'deportes' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                onClick={() => setFiltroCategoria('deportes')}
+              >
+                Deportes ({espacios.filter(e => (e.categoria && e.categoria.includes('deportes')) || e.tipo === 'deportivo').length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${filtroCategoria === 'clases' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                onClick={() => setFiltroCategoria('clases')}
+              >
+                Aulas y Laboratorios ({espacios.filter(e => e.categoria === 'clases' || e.tipo === 'aula' || e.tipo === 'laboratorio').length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${filtroCategoria === 'todos' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                onClick={() => setFiltroCategoria('todos')}
+              >
+                Todos ({espacios.length})
+              </button>
             </div>
 
             {/* Aviso informativo de estado de disponibilidad */}
@@ -292,7 +359,7 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
                 gap: '6px'
               }}>
                 <span style={{ color: disponibles.length > 0 ? '#1E40AF' : '#991B1B', fontWeight: '600' }}>
-                  {disponibles.length} de {espacios.length} espacios disponibles para la fecha y horario ingresados.
+                  {disponibles.length} de {espacios.length} espacios libres en este horario ({disponiblesEnCategoria.length} en la categoria elegida).
                 </span>
               </div>
             )}
@@ -310,8 +377,8 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
               onChange={(e) => setIdEspacio(e.target.value)}
               onBlur={() => handleBlur('idEspacio')}
             >
-              <option value="">-- Seleccionar Espacio Academico --</option>
-              {espacios.map((esp) => {
+              <option value="">-- Seleccionar Espacio Requerido ({espaciosFiltrados.length}) --</option>
+              {espaciosFiltrados.map((esp) => {
                 const estaDisponible = idsDisponibles ? idsDisponibles.has(esp.id_espacio) : null;
                 const etiquetaEstado = estaDisponible === true
                   ? '[DISPONIBLE] '
@@ -331,7 +398,7 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
                         : {}
                     }
                   >
-                    {etiquetaEstado}{esp.nombre_espacio} ({esp.tipo} - Capacidad: {esp.capacidad} pers.)
+                    {etiquetaEstado}{esp.nombre_espacio} - {esp.tipo} - Capacidad {esp.capacidad} pers.
                   </option>
                 );
               })}
@@ -377,14 +444,14 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
               </div>
             )}
 
-            {/* Chips sugeridos de espacios disponibles */}
-            {disponibles && disponibles.length > 0 && (
+            {/* Chips sugeridos de espacios disponibles en la categoria */}
+            {disponiblesEnCategoria && disponiblesEnCategoria.length > 0 && (
               <div style={{ marginTop: '10px' }}>
                 <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: '600' }}>
-                  Seleccion rapida de espacios disponibles:
+                  Espacios disponibles en esta categoria:
                 </span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-                  {disponibles.map((esp) => (
+                  {disponiblesEnCategoria.map((esp) => (
                     <button
                       key={esp.id_espacio}
                       type="button"
@@ -392,7 +459,7 @@ export default function ModalEvento({ isOpen, onClose, onEventoCreado }) {
                       style={{ fontSize: '0.75rem', padding: '3px 8px' }}
                       onClick={() => setIdEspacio(String(esp.id_espacio))}
                     >
-                      {esp.nombre_espacio} ({esp.capacidad} pers.)
+                      {esp.nombre_espacio} - {esp.capacidad} pers.
                     </button>
                   ))}
                 </div>

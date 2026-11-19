@@ -13,7 +13,7 @@ import {
   FilterIcon
 } from '../components/Icons';
 
-const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves'];
 
 export default function AlumnoView({ user, targetTabTrigger }) {
   const [activeTab, setActiveTab] = useState('horario'); // 'horario' | 'solicitudes' | 'asignaturas'
@@ -291,6 +291,11 @@ export default function AlumnoView({ user, targetTabTrigger }) {
 
                           <div className="class-code">{c.clave_materia}</div>
                           <div className="class-name">{c.nombre_materia}</div>
+                          {c.carrera && (
+                            <div style={{ fontSize: '0.72rem', color: '#2563EB', fontWeight: '600', marginBottom: '4px' }}>
+                              {c.carrera} - Semestre {c.semestre}
+                            </div>
+                          )}
 
                           <div className="class-meta">
                             <span><MapPinIcon size={13} /> {c.nombre_espacio}</span>
@@ -401,7 +406,7 @@ export default function AlumnoView({ user, targetTabTrigger }) {
                               {esMio ? 'Mi propuesta' : `Por: ${ev.nombre_proponente} (${ev.rol_proponente})`}
                             </div>
                           </td>
-                          <td>{ev.nombre_espacio} ({ev.tipo_espacio})</td>
+                          <td>{ev.nombre_espacio}</td>
                           <td>{ev.fecha_evento}</td>
                           <td>{ev.hora_inicio} - {ev.hora_fin}</td>
                           <td>{renderBadgeSolicitud(ev.estado_evento)}</td>
@@ -445,6 +450,11 @@ export default function AlumnoView({ user, targetTabTrigger }) {
             {asignaturasUnicas.map((m) => (
               <div key={m.id_materia} style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', background: '#F8FAFC' }}>
                 <span className="badge badge-normal" style={{ marginBottom: '8px' }}>{m.clave_materia}</span>
+                {m.carrera && (
+                  <span className="badge badge-normal" style={{ marginBottom: '8px', marginLeft: '6px', background: '#EFF6FF', color: '#1E40AF', borderColor: '#BFDBFE' }}>
+                    {m.carrera} - Semestre {m.semestre}
+                  </span>
+                )}
                 <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#0F172A', margin: '4px 0' }}>
                   {m.nombre_materia}
                 </div>

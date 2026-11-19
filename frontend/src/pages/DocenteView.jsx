@@ -14,7 +14,7 @@ import {
   CheckCircleIcon
 } from '../components/Icons';
 
-const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves'];
 
 export default function DocenteView({ user, targetTabTrigger }) {
   const [activeTab, setActiveTab] = useState('clases'); // 'clases' | 'horario' | 'eventos'
@@ -61,17 +61,18 @@ export default function DocenteView({ user, targetTabTrigger }) {
               enlace_virtual: c.enlace_virtual || '',
               observaciones: c.observaciones || '',
               fecha: new Date().toISOString().split('T')[0],
+              isDirty: false,
               saving: false,
               successMsg: '',
               errorMsg: '',
             };
-          } else {
-            // Preservar valores ingresados por el docente para que nunca desaparezcan
+          } else if (!next[c.id_clase].isDirty && !next[c.id_clase].saving) {
+            // Sincronizar desde el servidor solo si el docente no esta editando activamente
             next[c.id_clase] = {
               ...next[c.id_clase],
-              estado: next[c.id_clase].saving ? next[c.id_clase].estado : (next[c.id_clase].estado || c.estado),
-              enlace_virtual: next[c.id_clase].enlace_virtual || c.enlace_virtual || '',
-              observaciones: next[c.id_clase].observaciones || c.observaciones || '',
+              estado: c.estado || 'normal',
+              enlace_virtual: c.enlace_virtual || '',
+              observaciones: c.observaciones || '',
             };
           }
         });
@@ -105,6 +106,7 @@ export default function DocenteView({ user, targetTabTrigger }) {
       [idClase]: {
         ...prev[idClase],
         [field]: value,
+        isDirty: true,
         successMsg: '',
         errorMsg: '',
       },
@@ -133,19 +135,24 @@ export default function DocenteView({ user, targetTabTrigger }) {
     }));
 
     try {
+      const obsAEnviar = form.observaciones ? form.observaciones.trim() : null;
       await api.actualizarEstadoClase(idClase, {
         fecha: form.fecha || new Date().toISOString().split('T')[0],
         estado: form.estado,
         enlace_virtual: form.enlace_virtual ? form.enlace_virtual.trim() : null,
-        observaciones: form.observaciones ? form.observaciones.trim() : null,
+        observaciones: obsAEnviar,
       });
+
+      const obsFinal = obsAEnviar || '';
 
       setFormStates((prev) => ({
         ...prev,
         [idClase]: {
           ...prev[idClase],
           saving: false,
-          successMsg: 'Estado actualizado correctamente',
+          isDirty: false,
+          observaciones: obsFinal,
+          successMsg: 'Estado y aviso actualizados con exito',
         },
       }));
 
@@ -153,7 +160,7 @@ export default function DocenteView({ user, targetTabTrigger }) {
       setClases((prevClases) =>
         prevClases.map((c) =>
           c.id_clase === idClase
-            ? { ...c, estado: form.estado, enlace_virtual: form.enlace_virtual, observaciones: form.observaciones }
+            ? { ...c, estado: form.estado, enlace_virtual: form.enlace_virtual, observaciones: obsFinal }
             : c
         )
       );
@@ -313,7 +320,7 @@ export default function DocenteView({ user, targetTabTrigger }) {
                 <option value="">Todas las materias ({clases.length})</option>
                 {materiasUnicasDocente.map((m) => (
                   <option key={m.id_materia} value={m.id_materia}>
-                    {m.clave_materia} - {m.nombre_materia}
+                    {m.clave_materia} - {m.nombre_materia} {m.carrera ? `[${m.carrera} S${m.semestre}]` : ''}
                   </option>
                 ))}
               </select>
@@ -437,9 +444,14 @@ export default function DocenteView({ user, targetTabTrigger }) {
                         </div>
                       )}
 
-                      <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0F172A', marginBottom: '4px' }}>
+                      <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0F172A', marginBottom: '2px' }}>
                         {clase.clave_materia} - {clase.nombre_materia}
                       </div>
+                      {clase.carrera && (
+                        <div style={{ fontSize: '0.78rem', color: '#2563EB', fontWeight: '600', marginBottom: '6px' }}>
+                          <span>{clase.carrera} - Semestre {clase.semestre}</span>
+                        </div>
+                      )}
 
                       <div style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <MapPinIcon size={14} /> Espacio: <strong>{clase.nombre_espacio}</strong> ({clase.tipo_espacio})
@@ -478,7 +490,22 @@ export default function DocenteView({ user, targetTabTrigger }) {
 
                       {/* Observaciones */}
                       <div className="form-group">
-                        <label style={{ fontSize: '0.82rem' }}>Aviso / Observaciones para los Alumnos:</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label style={{ fontSize: '0.82rem', margin: 0, fontWeight: '600' }}>
+                            Aviso / Observaciones para los Alumnos:
+                          </label>
+                          {form.observaciones && form.observaciones.trim() !== '' && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: '0.72rem', padding: '2px 8px', color: '#DC2626', cursor: 'pointer' }}
+                              onClick={() => handleInputChange(clase.id_clase, 'observaciones', '')}
+                              title="Limpiar texto del aviso"
+                            >
+                              Eliminar aviso
+                            </button>
+                          )}
+                        </div>
                         <textarea
                           rows="2"
                           className="form-control"
@@ -486,6 +513,11 @@ export default function DocenteView({ user, targetTabTrigger }) {
                           value={form.observaciones}
                           onChange={(e) => handleInputChange(clase.id_clase, 'observaciones', e.target.value)}
                         />
+                        {form.isDirty && (
+                          <div style={{ fontSize: '0.72rem', color: '#D97706', marginTop: '3px' }}>
+                            Cambios pendientes por guardar en esta clase.
+                          </div>
+                        )}
                       </div>
 
                       {form.errorMsg && (
@@ -544,7 +576,7 @@ export default function DocenteView({ user, targetTabTrigger }) {
                 <option value="">Todas mis materias</option>
                 {materiasUnicasDocente.map((m) => (
                   <option key={m.id_materia} value={m.id_materia}>
-                    {m.clave_materia} - {m.nombre_materia}
+                    {m.clave_materia} - {m.nombre_materia} {m.carrera ? `[${m.carrera} S${m.semestre}]` : ''}
                   </option>
                 ))}
               </select>

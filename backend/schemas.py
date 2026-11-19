@@ -89,3 +89,27 @@ class EventoStatusUpdate(BaseModel):
             raise ValueError(f"Estado de evento invalido. Debe ser uno de: {valid}")
         return v_clean
 
+class GenerarHorarioRequest(BaseModel):
+    carrera: str
+    semestre: Optional[int] = None
+    periodo_lectivo: str = "2026-2"
+    turno: str = "matutino" # "matutino" (07:00-15:00) | "vespertino" (13:00-19:00) | "mixto" (07:00-19:00)
+    guardar: bool = False
+
+class ClaseLoteItem(BaseModel):
+    id_materia: int
+    id_docente: int
+    id_espacio: int
+    dia_semana: str
+    hora_inicio: str
+    hora_fin: str
+    periodo_lectivo: str = "2026-2"
+
+class GuardarLoteRequest(BaseModel):
+    clases: List[ClaseLoteItem]
+    limpiar_anteriores: bool = True
+    carrera: Optional[str] = None
+    semestre: Optional[int] = None
+    periodo_lectivo: str = "2026-2"
+
+

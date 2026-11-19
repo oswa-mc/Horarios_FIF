@@ -27,9 +27,14 @@ def get_clases_docente(id_usuario: int, current_user: dict = Depends(get_current
             m.id_materia,
             m.clave_materia,
             m.nombre_materia,
+            m.carrera,
+            m.semestre,
+            m.horas_teoria,
+            m.horas_practica,
             e.id_espacio,
             e.nombre_espacio,
             e.tipo as tipo_espacio,
+            e.categoria as categoria_espacio,
             COUNT(DISTINCT ca.id_alumno) as total_alumnos,
             COALESCE(rec.estado, 'normal') as estado,
             COALESCE(
@@ -55,8 +60,8 @@ def get_clases_docente(id_usuario: int, current_user: dict = Depends(get_current
         ) rec ON cp.id_clase = rec.id_clase
         WHERE cp.id_docente = %s
         GROUP BY cp.id_clase, cp.dia_semana, cp.hora_inicio, cp.hora_fin, cp.periodo_lectivo,
-                 m.id_materia, m.clave_materia, m.nombre_materia, e.id_espacio, e.nombre_espacio,
-                 e.tipo, rec.estado, rec.enlace_virtual, rec.observaciones, rec.fecha
+                 m.id_materia, m.clave_materia, m.nombre_materia, m.carrera, m.semestre, m.horas_teoria, m.horas_practica, e.id_espacio, e.nombre_espacio,
+                 e.tipo, e.categoria, rec.estado, rec.enlace_virtual, rec.observaciones, rec.fecha
         ORDER BY 
             FIELD(cp.dia_semana, 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'),
             cp.hora_inicio ASC
@@ -93,13 +98,15 @@ def actualizar_estado_clase(id_clase: int, payload: EstadoClaseUpdate, current_u
         if prev and prev.get("enlace_virtual"):
             enlace_a_guardar = prev["enlace_virtual"]
 
+    obs_a_guardar = payload.observaciones.strip() if payload.observaciones and payload.observaciones.strip() else None
+
     insert_sql = """
         INSERT INTO registro_estado_clase (id_clase, fecha, estado, enlace_virtual, observaciones)
         VALUES (%s, %s, %s, %s, %s)
     """
     new_id = execute_write(
         insert_sql,
-        (id_clase, payload.fecha, payload.estado, enlace_a_guardar, payload.observaciones)
+        (id_clase, payload.fecha, payload.estado, enlace_a_guardar, obs_a_guardar)
     )
 
     return {
@@ -108,7 +115,7 @@ def actualizar_estado_clase(id_clase: int, payload: EstadoClaseUpdate, current_u
         "id_clase": id_clase,
         "estado": payload.estado,
         "enlace_virtual": enlace_a_guardar,
-        "observaciones": payload.observaciones,
+        "observaciones": obs_a_guardar,
         "fecha": payload.fecha
     }
 

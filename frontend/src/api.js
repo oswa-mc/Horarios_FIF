@@ -97,12 +97,41 @@ export const api = {
     }),
 
   // Espacios
-  getEspacios: () => request('/espacios'),
-  getEspaciosDisponibles: (fecha, hora_inicio, hora_fin) =>
-    request(`/espacios/disponibles?fecha=${fecha}&hora_inicio=${hora_inicio}&hora_fin=${hora_fin}`),
+  getEspacios: (categoria) =>
+    request(categoria ? `/espacios?categoria=${encodeURIComponent(categoria)}` : '/espacios'),
+  getEspaciosDisponibles: (fecha, hora_inicio, hora_fin, categoria) =>
+    request(
+      `/espacios/disponibles?fecha=${fecha}&hora_inicio=${hora_inicio}&hora_fin=${hora_fin}${
+        categoria ? `&categoria=${encodeURIComponent(categoria)}` : ''
+      }`
+    ),
 
   // Catalogos
-  getMaterias: () => request('/materias'),
+  getMaterias: (carrera, semestre) => {
+    let url = '/materias';
+    const params = [];
+    if (carrera) params.push(`carrera=${encodeURIComponent(carrera)}`);
+    if (semestre) params.push(`semestre=${encodeURIComponent(semestre)}`);
+    if (params.length > 0) url += `?${params.join('&')}`;
+    return request(url);
+  },
+  getCarreras: () => request('/carreras'),
   getDocentes: () => request('/docentes'),
+
+  // Planificador y Generador de Horarios por Lote / Semestre
+  generarHorariosSemestre: (data) =>
+    request('/admin/horarios/generar', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  guardarHorariosLote: (data) =>
+    request('/admin/horarios/guardar-lote', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  limpiarHorariosSemestre: (carrera, semestre, periodo_lectivo = '2026-2') =>
+    request(`/admin/horarios/limpiar?carrera=${encodeURIComponent(carrera)}&semestre=${semestre}&periodo_lectivo=${encodeURIComponent(periodo_lectivo)}`, {
+      method: 'DELETE',
+    }),
 };
 

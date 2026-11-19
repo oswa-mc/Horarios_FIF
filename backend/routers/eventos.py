@@ -97,7 +97,8 @@ def get_eventos(current_user: dict = Depends(get_current_user)):
             ec.id_espacio,
             e.nombre_espacio,
             e.tipo as tipo_espacio,
-            e.capacidad as capacidad_espacio
+            e.capacidad as capacidad_espacio,
+            e.categoria as categoria_espacio
         FROM evento_comunitario ec
         JOIN espacio_academico e ON ec.id_espacio = e.id_espacio
         JOIN usuario up ON ec.id_proponente = up.id_usuario

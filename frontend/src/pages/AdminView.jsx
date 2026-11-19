@@ -3,6 +3,7 @@ import { api } from '../api';
 import ModalEspaciosDisponibles from '../components/ModalEspaciosDisponibles';
 import {
   ClipboardCheckIcon,
+  CalendarIcon,
   InboxIcon,
   BuildingIcon,
   BellIcon,
@@ -10,13 +11,24 @@ import {
   UsersIcon,
   SearchIcon,
   FilterIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ClockIcon,
+  BookOpenIcon,
+  GraduationCapIcon
 } from '../components/Icons';
 
-const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves'];
+const BLOQUES_HORARIO_OFICIALES = [
+  { ini: '07:00', fin: '09:00', label: '07:00 - 09:00 hrs (Bloque 1)' },
+  { ini: '09:00', fin: '11:00', label: '09:00 - 11:00 hrs (Bloque 2)' },
+  { ini: '11:00', fin: '13:00', label: '11:00 - 13:00 hrs (Bloque 3)' },
+  { ini: '13:00', fin: '15:00', label: '13:00 - 15:00 hrs (Bloque 4)' },
+  { ini: '15:00', fin: '17:00', label: '15:00 - 17:00 hrs (Bloque 5)' },
+  { ini: '17:00', fin: '19:00', label: '17:00 - 19:00 hrs (Bloque 6)' },
+];
 
 export default function AdminView({ user, targetTabTrigger }) {
-  const [activeTab, setActiveTab] = useState('programacion'); // 'programacion' | 'eventos' | 'espacios'
+  const [activeTab, setActiveTab] = useState('programacion'); // 'programacion' | 'planificador' | 'eventos' | 'espacios'
   const [filtroEventosAdmin, setFiltroEventosAdmin] = useState('todos'); // 'todos' | 'pendientes' | 'aprobados' | 'otros'
 
   // Datos para Programacion General
@@ -26,28 +38,47 @@ export default function AdminView({ user, targetTabTrigger }) {
   const [espacios, setEspacios] = useState([]);
 
   // Filtros de clases
+  const [filtroCarreraAdmin, setFiltroCarreraAdmin] = useState('');
+  const [filtroSemestreAdmin, setFiltroSemestreAdmin] = useState('');
   const [filtroMateriaAdmin, setFiltroMateriaAdmin] = useState('');
   const [busquedaClaseAdmin, setBusquedaClaseAdmin] = useState('');
 
-  // Formulario nueva clase
+  // Filtros para el selector de materias en el formulario de nueva clase
+  const [formCarrera, setFormCarrera] = useState('');
+  const [formSemestre, setFormSemestre] = useState('');
+
+  // Formulario nueva clase individual
   const [nuevaClase, setNuevaClase] = useState({
     id_materia: '',
     id_docente: '',
     id_espacio: '',
     dia_semana: 'lunes',
-    hora_inicio: '08:00',
-    hora_fin: '10:00',
+    hora_inicio: '07:00',
+    hora_fin: '09:00',
     periodo_lectivo: '2026-2',
   });
   const [claseError, setClaseError] = useState('');
   const [claseSuccess, setClaseSuccess] = useState('');
   const [creandoClase, setCreandoClase] = useState(false);
 
+  // Estados para el Planificador de Horarios por Semestre
+  const [planCarrera, setPlanCarrera] = useState('INF18');
+  const [planSemestre, setPlanSemestre] = useState('1');
+  const [planTurno, setPlanTurno] = useState('matutino');
+  const [planClasesGeneradas, setPlanClasesGeneradas] = useState([]);
+  const [generandoPlan, setGenerandoPlan] = useState(false);
+  const [guardandoPlan, setGuardandoPlan] = useState(false);
+  const [planMensaje, setPlanMensaje] = useState({ tipo: '', texto: '' });
+
   // Datos para Solicitudes de Eventos
   const [eventos, setEventos] = useState([]);
   const [eventoSeleccionadoConflicto, setEventoSeleccionadoConflicto] = useState(null);
   const [modalDisponiblesAbierto, setModalDisponiblesAbierto] = useState(false);
   const [eventoActionError, setEventoActionError] = useState('');
+
+  // Filtros para catalogo de espacios academicos
+  const [filtroCategoriaEspacio, setFiltroCategoriaEspacio] = useState('todos');
+  const [busquedaEspacio, setBusquedaEspacio] = useState('');
 
   const [loading, setLoading] = useState(true);
 
@@ -167,8 +198,158 @@ export default function AdminView({ user, targetTabTrigger }) {
     setModalDisponiblesAbierto(true);
   };
 
-  // Filtrado de clases
+  const carrerasDisponibles = Array.from(new Set(materias.map((m) => m.carrera).filter(Boolean))).sort();
+
+  const materiasFormulario = materias.filter((m) => {
+    if (formCarrera && m.carrera !== formCarrera) return false;
+    if (formSemestre && String(m.semestre) !== String(formSemestre)) return false;
+    return true;
+  });
+
+  // Materias filtradas por carrera y semestre seleccionados en el filtro de la tabla de clases
+  const materiasFiltroAdmin = React.useMemo(() => {
+    return materias.filter((m) => {
+      if (filtroCarreraAdmin && m.carrera !== filtroCarreraAdmin) return false;
+      if (filtroSemestreAdmin && String(m.semestre) !== String(filtroSemestreAdmin)) return false;
+      return true;
+    });
+  }, [materias, filtroCarreraAdmin, filtroSemestreAdmin]);
+
+  // Si cambia carrera o semestre en el filtro, reiniciar filtro de materia si ya no coincide
+  useEffect(() => {
+    if (filtroMateriaAdmin) {
+      const existe = materiasFiltroAdmin.some((m) => String(m.id_materia) === String(filtroMateriaAdmin));
+      if (!existe) {
+        setFiltroMateriaAdmin('');
+      }
+    }
+  }, [filtroCarreraAdmin, filtroSemestreAdmin, materiasFiltroAdmin, filtroMateriaAdmin]);
+
+  // Planificador por Semestre: Generar propuesta
+  const handleGenerarPlan = async (guardarDirecto = false) => {
+    setPlanMensaje({ tipo: '', texto: '' });
+    if (!planCarrera) {
+      setPlanMensaje({ tipo: 'error', texto: 'Por favor selecciona una carrera o Todas las Carreras.' });
+      return;
+    }
+
+    setGenerandoPlan(true);
+    try {
+      const res = await api.generarHorariosSemestre({
+        carrera: planCarrera,
+        semestre: planSemestre ? parseInt(planSemestre, 10) : null,
+        periodo_lectivo: '2026-2',
+        turno: planTurno,
+        guardar: guardarDirecto,
+      });
+
+      setPlanClasesGeneradas(res.clases || []);
+      if (guardarDirecto) {
+        setPlanMensaje({
+          tipo: 'exito',
+          texto: `Se generaron y aplicaron exitosamente ${res.total_clases_generadas} clases en la base de datos sin ningun empalme.`,
+        });
+        const [nuevasClases, nuevosEspacios] = await Promise.all([
+          api.getAdminClases(),
+          api.getEspacios(),
+        ]);
+        setClases(nuevasClases);
+        setEspacios(nuevosEspacios);
+      } else {
+        setPlanMensaje({
+          tipo: 'info',
+          texto: `Propuesta calculada: ${res.total_clases_generadas} clases distribuidas de lunes a jueves en bloques de 2 horas. Revisa la distribucion abajo y haz clic en "Guardar y Aplicar Horario".`,
+        });
+      }
+    } catch (err) {
+      setPlanMensaje({
+        tipo: 'error',
+        texto: err.detail || 'Error al generar la propuesta de horarios',
+      });
+    } finally {
+      setGenerandoPlan(false);
+    }
+  };
+
+  // Planificador por Semestre: Guardar propuesta en lote
+  const handleGuardarPlanLote = async () => {
+    if (planClasesGeneradas.length === 0) return;
+    setGuardandoPlan(true);
+    setPlanMensaje({ tipo: '', texto: '' });
+    try {
+      await api.guardarHorariosLote({
+        clases: planClasesGeneradas.map((c) => ({
+          id_materia: c.id_materia,
+          id_docente: c.id_docente,
+          id_espacio: c.id_espacio,
+          dia_semana: c.dia_semana,
+          hora_inicio: c.hora_inicio,
+          hora_fin: c.hora_fin,
+          periodo_lectivo: c.periodo_lectivo || '2026-2',
+        })),
+        limpiar_anteriores: true,
+        carrera: planCarrera,
+        semestre: planSemestre ? parseInt(planSemestre, 10) : null,
+        periodo_lectivo: '2026-2',
+      });
+
+      setPlanMensaje({
+        tipo: 'exito',
+        texto: `Horario guardado exitosamente: ${planClasesGeneradas.length} clases sincronizadas en el sistema sin empalmes.`,
+      });
+
+      const [nuevasClases, nuevosEspacios] = await Promise.all([
+        api.getAdminClases(),
+        api.getEspacios(),
+      ]);
+      setClases(nuevasClases);
+      setEspacios(nuevosEspacios);
+    } catch (err) {
+      setPlanMensaje({
+        tipo: 'error',
+        texto: err.detail || 'Error al guardar el horario en la base de datos',
+      });
+    } finally {
+      setGuardandoPlan(false);
+    }
+  };
+
+  // Planificador por Semestre: Limpiar horario
+  const handleLimpiarSemestre = async () => {
+    if (!planCarrera) return;
+    const semTxt = planSemestre ? `Semestre ${planSemestre}` : 'todos los semestres';
+    if (!window.confirm(`Estas seguro de que deseas eliminar todas las clases de ${planCarrera} (${semTxt}) registradas en el sistema?`)) return;
+
+    try {
+      if (planSemestre) {
+        await api.limpiarHorariosSemestre(planCarrera, parseInt(planSemestre, 10));
+      } else {
+        for (let s = 1; s <= 8; s++) {
+          await api.limpiarHorariosSemestre(planCarrera, s);
+        }
+      }
+      setPlanClasesGeneradas([]);
+      setPlanMensaje({ tipo: 'info', texto: `Horario eliminado para ${planCarrera} (${semTxt}).` });
+
+      const [nuevasClases, nuevosEspacios] = await Promise.all([
+        api.getAdminClases(),
+        api.getEspacios(),
+      ]);
+      setClases(nuevasClases);
+      setEspacios(nuevosEspacios);
+    } catch (err) {
+      alert(err.detail || 'Error al limpiar horarios del semestre');
+    }
+  };
+
+  // Filtrado de clases con soporte de Carrera, Semestre, Materia y Busqueda
   const clasesFiltradas = clases.filter((c) => {
+    if (filtroCarreraAdmin && c.carrera !== filtroCarreraAdmin) {
+      return false;
+    }
+    if (filtroSemestreAdmin && String(c.semestre) !== String(filtroSemestreAdmin)) {
+      return false;
+    }
     if (filtroMateriaAdmin && String(c.id_materia) !== String(filtroMateriaAdmin)) {
       return false;
     }
@@ -178,10 +359,80 @@ export default function AdminView({ user, targetTabTrigger }) {
       const matchClave = c.clave_materia?.toLowerCase().includes(q);
       const matchDocente = c.nombre_docente?.toLowerCase().includes(q);
       const matchEspacio = c.nombre_espacio?.toLowerCase().includes(q);
-      if (!matchMateria && !matchClave && !matchDocente && !matchEspacio) {
+      const matchCarrera = c.carrera?.toLowerCase().includes(q);
+      if (!matchMateria && !matchClave && !matchDocente && !matchEspacio && !matchCarrera) {
         return false;
       }
     }
+    return true;
+  });
+
+  // Agrupacion organizada de los 51 espacios para el selector de clases
+  const gruposEspacios = React.useMemo(() => {
+    return [
+      {
+        grupo: 'Aulas Normales (A01 - A26)',
+        items: espacios.filter((e) => e.nombre_espacio.startsWith('Aula A')),
+      },
+      {
+        grupo: 'Aulas de Innovacion (I01 - I05)',
+        items: espacios.filter((e) => e.nombre_espacio.startsWith('Aula de Innovacion')),
+      },
+      {
+        grupo: 'Laboratorios de Computo (D01 - D09)',
+        items: espacios.filter((e) => e.nombre_espacio.startsWith('Laboratorio de Computo')),
+      },
+      {
+        grupo: 'Laboratorios de Usos Multiples (B01 - B03)',
+        items: espacios.filter((e) => e.nombre_espacio.startsWith('Laboratorio de Usos Multiples')),
+      },
+      {
+        grupo: 'Laboratorios de Redes y Electronica (LR1, LR2, LE)',
+        items: espacios.filter((e) => e.nombre_espacio.startsWith('Laboratorio de Redes') || e.nombre_espacio.startsWith('Laboratorio de Electronica')),
+      },
+      {
+        grupo: 'Instalaciones Deportivas (Caballo de Troya, Arco Techo, Coliseo, Auditorio)',
+        items: espacios.filter((e) => (e.categoria || '').includes('deportes')),
+      },
+      {
+        grupo: 'Espacios para Eventos y Reuniones (Aula de Usos Multiples, etc.)',
+        items: espacios.filter((e) => (e.categoria || '').includes('eventos') && !e.nombre_espacio.startsWith('Aula A') && !e.nombre_espacio.startsWith('Laboratorio') && !(e.categoria || '').includes('deportes')),
+      },
+      {
+        grupo: 'Otros Espacios',
+        items: espacios.filter((e) =>
+          !e.nombre_espacio.startsWith('Aula A') &&
+          !e.nombre_espacio.startsWith('Aula de Innovacion') &&
+          !e.nombre_espacio.startsWith('Laboratorio') &&
+          !(e.categoria || '').includes('deportes') &&
+          !(e.categoria || '').includes('eventos')
+        ),
+      },
+    ].filter((g) => g.items.length > 0);
+  }, [espacios]);
+
+  // Espacios filtrados para la pestana de Espacios Academicos
+  const espaciosFiltrados = espacios.filter((esp) => {
+    if (filtroCategoriaEspacio === 'clases') {
+      if (!(esp.categoria || '').includes('clases')) return false;
+    } else if (filtroCategoriaEspacio === 'deportes') {
+      if (!(esp.categoria || '').includes('deportes')) return false;
+    } else if (filtroCategoriaEspacio === 'eventos') {
+      if (!(esp.categoria || '').includes('eventos')) return false;
+    } else if (filtroCategoriaEspacio === 'aulas') {
+      if (esp.tipo !== 'aula') return false;
+    } else if (filtroCategoriaEspacio === 'laboratorios') {
+      if (esp.tipo !== 'laboratorio') return false;
+    }
+
+    if (busquedaEspacio.trim()) {
+      const q = busquedaEspacio.toLowerCase();
+      const matchNom = (esp.nombre_espacio || '').toLowerCase().includes(q);
+      const matchTipo = (esp.tipo || '').toLowerCase().includes(q);
+      const matchCat = (esp.categoria || '').toLowerCase().includes(q);
+      if (!matchNom && !matchTipo && !matchCat) return false;
+    }
+
     return true;
   });
 
@@ -195,7 +446,15 @@ export default function AdminView({ user, targetTabTrigger }) {
           style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
           <ClipboardCheckIcon size={16} />
-          <span>Programacion General</span>
+          <span>Programacion Individual</span>
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'planificador' ? 'active' : ''}`}
+          onClick={() => setActiveTab('planificador')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+        >
+          <CalendarIcon size={16} />
+          <span>Planificador por Semestre</span>
         </button>
         <button
           className={`tab-btn ${activeTab === 'eventos' ? 'active' : ''}`}
@@ -268,18 +527,54 @@ export default function AdminView({ user, targetTabTrigger }) {
 
             <form onSubmit={handleCrearClase}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                {/* Filtro previo de Carrera */}
+                <div className="form-group">
+                  <label>Filtrar por Carrera</label>
+                  <select
+                    className="form-control"
+                    value={formCarrera}
+                    onChange={(e) => {
+                      setFormCarrera(e.target.value);
+                      setNuevaClase((prev) => ({ ...prev, id_materia: '' }));
+                    }}
+                  >
+                    <option value="">-- Todas las Carreras ({carrerasDisponibles.length}) --</option>
+                    {carrerasDisponibles.map((car) => (
+                      <option key={car} value={car}>{car}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro previo de Semestre */}
+                <div className="form-group">
+                  <label>Filtrar por Semestre</label>
+                  <select
+                    className="form-control"
+                    value={formSemestre}
+                    onChange={(e) => {
+                      setFormSemestre(e.target.value);
+                      setNuevaClase((prev) => ({ ...prev, id_materia: '' }));
+                    }}
+                  >
+                    <option value="">-- Todos los Semestres (1-8) --</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                      <option key={s} value={s}>Semestre {s}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Materia */}
                 <div className="form-group">
-                  <label>Materia *</label>
+                  <label>Materia ({materiasFormulario.length} disponibles) *</label>
                   <select
                     className="form-control"
                     value={nuevaClase.id_materia}
                     onChange={(e) => setNuevaClase({ ...nuevaClase, id_materia: e.target.value })}
                   >
-                    <option value="">-- Seleccionar Materia --</option>
-                    {materias.map((m) => (
+                    <option value="">-- Seleccionar Materia ({materiasFormulario.length}) --</option>
+                    {materiasFormulario.map((m) => (
                       <option key={m.id_materia} value={m.id_materia}>
-                        {m.clave_materia} - {m.nombre_materia}
+                        {m.clave_materia} - {m.nombre_materia} [{m.carrera} S{m.semestre}]
                       </option>
                     ))}
                   </select>
@@ -304,17 +599,21 @@ export default function AdminView({ user, targetTabTrigger }) {
 
                 {/* Espacio */}
                 <div className="form-group">
-                  <label>Espacio Academico (Aula/Lab) *</label>
+                  <label>Espacio Academico ({espacios.length} disponibles) *</label>
                   <select
                     className="form-control"
                     value={nuevaClase.id_espacio}
                     onChange={(e) => setNuevaClase({ ...nuevaClase, id_espacio: e.target.value })}
                   >
-                    <option value="">-- Seleccionar Espacio --</option>
-                    {espacios.map((esp) => (
-                      <option key={esp.id_espacio} value={esp.id_espacio}>
-                        {esp.nombre_espacio} (Cap: {esp.capacidad})
-                      </option>
+                    <option value="">-- Seleccionar Espacio ({espacios.length}) --</option>
+                    {gruposEspacios.map((g) => (
+                      <optgroup key={g.grupo} label={g.grupo}>
+                        {g.items.map((esp) => (
+                          <option key={esp.id_espacio} value={esp.id_espacio}>
+                            {esp.nombre_espacio} (Cap: {esp.capacidad})
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -382,23 +681,49 @@ export default function AdminView({ user, targetTabTrigger }) {
               </div>
 
               {/* Barra de filtros de clases */}
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <FilterIcon size={16} />
                   <select
                     className="form-control"
-                    style={{ width: 'auto', minWidth: '180px', padding: '6px 10px', fontSize: '0.85rem' }}
-                    value={filtroMateriaAdmin}
-                    onChange={(e) => setFiltroMateriaAdmin(e.target.value)}
+                    style={{ width: 'auto', minWidth: '120px', padding: '6px 10px', fontSize: '0.85rem' }}
+                    value={filtroCarreraAdmin}
+                    onChange={(e) => setFiltroCarreraAdmin(e.target.value)}
                   >
-                    <option value="">Todas las Materias ({materias.length})</option>
-                    {materias.map((m) => (
-                      <option key={m.id_materia} value={m.id_materia}>
-                        {m.clave_materia} - {m.nombre_materia}
-                      </option>
+                    <option value="">Carrera (Todas)</option>
+                    {carrerasDisponibles.map((car) => (
+                      <option key={car} value={car}>{car}</option>
                     ))}
                   </select>
                 </div>
+
+                <select
+                  className="form-control"
+                  style={{ width: 'auto', minWidth: '110px', padding: '6px 10px', fontSize: '0.85rem' }}
+                  value={filtroSemestreAdmin}
+                  onChange={(e) => setFiltroSemestreAdmin(e.target.value)}
+                >
+                  <option value="">Semestre (Todos)</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                    <option key={s} value={s}>Semestre {s}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="form-control"
+                  style={{ width: 'auto', minWidth: '220px', padding: '6px 10px', fontSize: '0.85rem' }}
+                  value={filtroMateriaAdmin}
+                  onChange={(e) => setFiltroMateriaAdmin(e.target.value)}
+                >
+                  <option value="">
+                    {filtroCarreraAdmin || filtroSemestreAdmin ? `Materias filtradas (${materiasFiltroAdmin.length})` : `Todas las Materias (${materias.length})`}
+                  </option>
+                  {materiasFiltroAdmin.map((m) => (
+                    <option key={m.id_materia} value={m.id_materia}>
+                      {m.clave_materia} - {m.nombre_materia} [{m.carrera} S{m.semestre}]
+                    </option>
+                  ))}
+                </select>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <SearchIcon size={16} />
@@ -406,22 +731,24 @@ export default function AdminView({ user, targetTabTrigger }) {
                     type="text"
                     className="form-control"
                     style={{ width: '180px', padding: '6px 10px', fontSize: '0.85rem' }}
-                    placeholder="Buscar clase..."
+                    placeholder="Buscar materia, clave..."
                     value={busquedaClaseAdmin}
                     onChange={(e) => setBusquedaClaseAdmin(e.target.value)}
                   />
                 </div>
 
-                {(filtroMateriaAdmin || busquedaClaseAdmin) && (
+                {(filtroCarreraAdmin || filtroSemestreAdmin || filtroMateriaAdmin || busquedaClaseAdmin) && (
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => {
+                      setFiltroCarreraAdmin('');
+                      setFiltroSemestreAdmin('');
                       setFiltroMateriaAdmin('');
                       setBusquedaClaseAdmin('');
                     }}
                   >
-                    Limpiar Filtro
+                    Limpiar Filtros
                   </button>
                 )}
               </div>
@@ -454,7 +781,14 @@ export default function AdminView({ user, targetTabTrigger }) {
                         <td style={{ textTransform: 'capitalize', fontWeight: '700' }}>{c.dia_semana}</td>
                         <td>{c.hora_inicio} - {c.hora_fin}</td>
                         <td><span className="badge badge-normal">{c.clave_materia}</span></td>
-                        <td style={{ fontWeight: '600' }}>{c.nombre_materia}</td>
+                        <td>
+                          <div style={{ fontWeight: '600' }}>{c.nombre_materia}</div>
+                          {c.carrera && (
+                            <div style={{ fontSize: '0.72rem', color: '#2563EB', marginTop: '2px', fontWeight: '600' }}>
+                              <span>{c.carrera} - Semestre {c.semestre}</span>
+                            </div>
+                          )}
+                        </td>
                         <td>{c.nombre_docente}</td>
                         <td>{c.nombre_espacio}</td>
                         <td>
@@ -481,7 +815,438 @@ export default function AdminView({ user, targetTabTrigger }) {
         </div>
       )}
 
-      {/* TAB 2: SOLICITUDES DE EVENTOS Y EVALUACION PREVENTIVA DE EMPALMES */}
+      {/* TAB 2: PLANIFICADOR DE HORARIOS POR SEMESTRE */}
+      {activeTab === 'planificador' && (
+        <div>
+          {/* Tarjeta de configuracion y ejecucion del generador */}
+          <div className="card" style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CalendarIcon size={20} />
+                  <span>Planificador Automatico de Horarios por Semestre</span>
+                </h3>
+                <p style={{ color: '#64748B', fontSize: '0.85rem', marginTop: '4px', maxWidth: '850px' }}>
+                  Genera la distribucion horaria completa para las cohortes de estudiantes de <strong>lunes a jueves</strong> (iniciando a las <strong>07:00</strong> y concluyendo hacia las <strong>19:00 hrs</strong>). Cada clase dura <strong>2 horas continuas</strong> y cada grupo tiene un maximo de <strong>4 clases por dia</strong>. Los laboratorios de computo, redes y electronica se asignan unicamente a las materias tecnicas que verdaderamente los necesitan.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleLimpiarSemestre}
+                  style={{ color: '#DC2626', borderColor: '#FCA5A5' }}
+                >
+                  Limpiar Horario de este Semestre
+                </button>
+              </div>
+            </div>
+
+            {/* Mensaje de estado */}
+            {planMensaje.texto && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  marginBottom: '18px',
+                  fontWeight: '600',
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: planMensaje.tipo === 'exito' ? '#DCFCE7' : planMensaje.tipo === 'error' ? '#FEE2E2' : '#EFF6FF',
+                  color: planMensaje.tipo === 'exito' ? '#166534' : planMensaje.tipo === 'error' ? '#991B1B' : '#1E40AF',
+                  border: `1px solid ${planMensaje.tipo === 'exito' ? '#86EFAC' : planMensaje.tipo === 'error' ? '#FCA5A5' : '#BFDBFE'}`,
+                }}
+              >
+                {planMensaje.tipo === 'exito' ? <CheckCircleIcon size={18} /> : planMensaje.tipo === 'error' ? <AlertTriangleIcon size={18} /> : <CalendarIcon size={18} />}
+                <span>{planMensaje.texto}</span>
+              </div>
+            )}
+
+            {/* Selectores de Carrera, Semestre y Turno */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '18px' }}>
+              <div className="form-group">
+                <label style={{ fontWeight: '700', fontSize: '0.85rem' }}>Carrera *</label>
+                <select
+                  className="form-control"
+                  value={planCarrera}
+                  onChange={(e) => {
+                    setPlanCarrera(e.target.value);
+                    setPlanClasesGeneradas([]);
+                  }}
+                >
+                  <option value="todas">-- Todas las Carreras (Global) --</option>
+                  {carrerasDisponibles.map((car) => (
+                    <option key={car} value={car}>{car}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label style={{ fontWeight: '700', fontSize: '0.85rem' }}>Semestre *</label>
+                <select
+                  className="form-control"
+                  value={planSemestre}
+                  onChange={(e) => {
+                    setPlanSemestre(e.target.value);
+                    setPlanClasesGeneradas([]);
+                  }}
+                >
+                  <option value="">-- Todos los Semestres (1 al 8) --</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                    <option key={s} value={s}>Semestre {s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label style={{ fontWeight: '700', fontSize: '0.85rem' }}>Turno Preferente</label>
+                <select
+                  className="form-control"
+                  value={planTurno}
+                  onChange={(e) => setPlanTurno(e.target.value)}
+                >
+                  <option value="matutino">Matutino (07:00 a 15:00 hrs)</option>
+                  <option value="vespertino">Vespertino (13:00 a 19:00 hrs)</option>
+                  <option value="mixto">Jornada Completa (07:00 a 19:00 hrs)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label style={{ fontWeight: '700', fontSize: '0.85rem' }}>Periodo Lectivo</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value="2026-2"
+                  disabled
+                  style={{ background: '#F1F5F9' }}
+                />
+              </div>
+            </div>
+
+            {/* Botones de generacion */}
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={generandoPlan || guardandoPlan}
+                onClick={() => handleGenerarPlan(false)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <CalendarIcon size={16} />
+                <span>{generandoPlan ? 'Calculando horarios sin empalmes...' : 'Generar Propuesta de Horario'}</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-success"
+                disabled={generandoPlan || guardandoPlan}
+                onClick={() => handleGenerarPlan(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <CheckCircleIcon size={16} />
+                <span>{generandoPlan ? 'Procesando...' : 'Generar y Aplicar a BD Directo'}</span>
+              </button>
+
+              {planClasesGeneradas.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={guardandoPlan}
+                  onClick={handleGuardarPlanLote}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#0284C7' }}
+                >
+                  <ClipboardCheckIcon size={16} />
+                  <span>{guardandoPlan ? 'Guardando en BD...' : `Guardar ${planClasesGeneradas.length} Clases en Base de Datos`}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Estadisticas de asignacion inteligente de espacios */}
+          {planClasesGeneradas.length > 0 && (
+            <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '20px' }}>
+              <div style={{ fontWeight: '700', fontSize: '0.92rem', color: '#1E293B', marginBottom: '10px' }}>
+                Criterios de Asignacion Inteligente de Espacios ({planClasesGeneradas.length} clases):
+              </div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '6px', background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', fontWeight: '600' }}>
+                  Aulas Normales e Innovacion: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'aula').length} materias (teoria, matematicas, gestion)
+                </span>
+                <span style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '6px', background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', fontWeight: '600' }}>
+                  Laboratorios de Computo: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'lab_computo').length} materias (programacion, BD, software)
+                </span>
+                <span style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '6px', background: '#FAF5FF', color: '#7E22CE', border: '1px solid #E9D5FF', fontWeight: '600' }}>
+                  Laboratorios de Redes: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'lab_redes').length} materias (redes, telecomunicaciones)
+                </span>
+                <span style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '6px', background: '#FFF7ED', color: '#C2410C', border: '1px solid #FFEDD5', fontWeight: '600' }}>
+                  Laboratorio de Electronica: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'lab_electronica').length} materias (circuitos, hardware)
+                </span>
+                <span style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '6px', background: '#F0FDFA', color: '#0F766E', border: '1px solid #CCFBF1', fontWeight: '600' }}>
+                  Instalaciones Deportivas: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'deportes').length} materias
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Parrilla Semanal Visual (Lunes a Jueves) */}
+          {planClasesGeneradas.length > 0 && (
+            <div className="card" style={{ marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h4 style={{ fontSize: '1.1rem', fontWeight: '800' }}>
+                    Parrilla Visual del Horario Semanal (Lunes a Jueves)
+                  </h4>
+                  <p style={{ color: '#64748B', fontSize: '0.82rem' }}>
+                    Bloques de 2 horas continuas entre 07:00 y 19:00 hrs. Maximo 4 clases por dia por cohorte.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-success btn-sm"
+                  disabled={guardandoPlan}
+                  onClick={handleGuardarPlanLote}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <CheckCircleIcon size={14} />
+                  <span>Aplicar Horario al Sistema</span>
+                </button>
+              </div>
+
+              <div className="weekly-grid">
+                {['lunes', 'martes', 'miercoles', 'jueves'].map((dia) => {
+                  const clasesDia = planClasesGeneradas.filter((c) => c.dia_semana === dia).sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+                  return (
+                    <div key={dia} className="day-column">
+                      <div className="day-header" style={{ textTransform: 'capitalize' }}>
+                        <span>{dia}</span>
+                        <span className="count">{clasesDia.length} clases</span>
+                      </div>
+
+                      {clasesDia.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: '0.82rem', marginTop: '30px' }}>
+                          Sin clases programadas
+                        </div>
+                      ) : (
+                        clasesDia.map((c, idx) => {
+                          let badgeBg = '#F0FDF4';
+                          let badgeColor = '#15803D';
+                          let badgeText = 'Aula';
+                          if (c.tipo_espacio_requerido === 'lab_computo') {
+                            badgeBg = '#EFF6FF';
+                            badgeColor = '#1D4ED8';
+                            badgeText = 'Lab Computo';
+                          } else if (c.tipo_espacio_requerido === 'lab_redes') {
+                            badgeBg = '#FAF5FF';
+                            badgeColor = '#7E22CE';
+                            badgeText = 'Lab Redes';
+                          } else if (c.tipo_espacio_requerido === 'lab_electronica') {
+                            badgeBg = '#FFF7ED';
+                            badgeColor = '#C2410C';
+                            badgeText = 'Lab Electronica';
+                          } else if (c.tipo_espacio_requerido === 'deportes') {
+                            badgeBg = '#F0FDFA';
+                            badgeColor = '#0F766E';
+                            badgeText = 'Deportes';
+                          }
+
+                          return (
+                            <div key={idx} className="class-card" style={{ borderLeft: `4px solid ${badgeColor}`, marginBottom: '10px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <div className="class-time">{c.hora_inicio} - {c.hora_fin} hrs</div>
+                                <span style={{ fontSize: '0.65rem', fontWeight: '700', padding: '2px 5px', borderRadius: '4px', background: badgeBg, color: badgeColor }}>
+                                  {badgeText}
+                                </span>
+                              </div>
+
+                              <div style={{ fontWeight: '700', fontSize: '0.88rem', color: '#0F172A', marginTop: '2px' }}>
+                                {c.nombre_materia}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                Clave: <strong>{c.clave_materia}</strong>
+                              </div>
+
+                              <div style={{ fontSize: '0.78rem', color: '#334155', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <BuildingIcon size={12} />
+                                <span>{c.nombre_espacio}</span>
+                              </div>
+
+                              <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <UsersIcon size={12} />
+                                <span>Prof. {c.nombre_docente}</span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tabla de clases del planificador con edicion previa */}
+          {planClasesGeneradas.length > 0 && (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <h4 style={{ fontSize: '1.1rem', fontWeight: '800' }}>
+                  Detalle de Asignaciones ({planClasesGeneradas.length} materias)
+                </h4>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={guardandoPlan}
+                  onClick={handleGuardarPlanLote}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <CheckCircleIcon size={16} />
+                  <span>Confirmar y Guardar Todo en BD</span>
+                </button>
+              </div>
+
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Dia</th>
+                      <th>Horario (2h)</th>
+                      <th>Clave</th>
+                      <th>Materia</th>
+                      <th>Tipo Espacio</th>
+                      <th>Espacio Asignado</th>
+                      <th>Docente Titular</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {planClasesGeneradas.map((c, i) => (
+                      <tr key={i}>
+                        <td style={{ textTransform: 'capitalize', fontWeight: '700' }}>
+                          <select
+                            className="form-control"
+                            style={{ padding: '4px 6px', fontSize: '0.8rem', width: 'auto' }}
+                            value={c.dia_semana}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPlanClasesGeneradas((prev) =>
+                                prev.map((item, idx) => (idx === i ? { ...item, dia_semana: val } : item))
+                              );
+                            }}
+                          >
+                            {['lunes', 'martes', 'miercoles', 'jueves'].map((d) => (
+                              <option key={d} value={d}>{d.toUpperCase()}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            className="form-control"
+                            style={{ padding: '4px 6px', fontSize: '0.8rem', width: 'auto' }}
+                            value={`${c.hora_inicio}-${c.hora_fin}`}
+                            onChange={(e) => {
+                              const [ini, fin] = e.target.value.split('-');
+                              setPlanClasesGeneradas((prev) =>
+                                prev.map((item, idx) => (idx === i ? { ...item, hora_inicio: ini, hora_fin: fin } : item))
+                              );
+                            }}
+                          >
+                            {BLOQUES_HORARIO_OFICIALES.map((b) => (
+                              <option key={b.ini} value={`${b.ini}-${b.fin}`}>{b.ini} - {b.fin}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td><span className="badge badge-normal">{c.clave_materia}</span></td>
+                        <td>
+                          <div style={{ fontWeight: '600' }}>{c.nombre_materia}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                            {c.carrera} - Semestre {c.semestre}
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className="badge badge-normal"
+                            style={{
+                              fontSize: '0.68rem',
+                              textTransform: 'capitalize',
+                              background: c.tipo_espacio_requerido === 'lab_computo' ? '#EFF6FF' : c.tipo_espacio_requerido === 'lab_redes' ? '#FAF5FF' : c.tipo_espacio_requerido === 'lab_electronica' ? '#FFF7ED' : '#F0FDF4',
+                              color: c.tipo_espacio_requerido === 'lab_computo' ? '#1D4ED8' : c.tipo_espacio_requerido === 'lab_redes' ? '#7E22CE' : c.tipo_espacio_requerido === 'lab_electronica' ? '#C2410C' : '#15803D',
+                            }}
+                          >
+                            {c.tipo_espacio_requerido}
+                          </span>
+                        </td>
+                        <td>
+                          <select
+                            className="form-control"
+                            style={{ padding: '4px 6px', fontSize: '0.8rem', minWidth: '180px' }}
+                            value={c.id_espacio}
+                            onChange={(e) => {
+                              const espId = parseInt(e.target.value, 10);
+                              const espObj = espacios.find((esp) => esp.id_espacio === espId);
+                              setPlanClasesGeneradas((prev) =>
+                                prev.map((item, idx) =>
+                                  idx === i
+                                    ? {
+                                        ...item,
+                                        id_espacio: espId,
+                                        nombre_espacio: espObj ? espObj.nombre_espacio : item.nombre_espacio,
+                                        tipo_espacio: espObj ? espObj.tipo : item.tipo_espacio,
+                                      }
+                                    : item
+                                )
+                              );
+                            }}
+                          >
+                            {espacios.map((esp) => (
+                              <option key={esp.id_espacio} value={esp.id_espacio}>
+                                {esp.nombre_espacio} (Cap: {esp.capacidad})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            className="form-control"
+                            style={{ padding: '4px 6px', fontSize: '0.8rem', minWidth: '180px' }}
+                            value={c.id_docente}
+                            onChange={(e) => {
+                              const docId = parseInt(e.target.value, 10);
+                              const docObj = docentes.find((d) => d.id_usuario === docId);
+                              setPlanClasesGeneradas((prev) =>
+                                prev.map((item, idx) =>
+                                  idx === i
+                                    ? {
+                                        ...item,
+                                        id_docente: docId,
+                                        nombre_docente: docObj ? docObj.nombre : item.nombre_docente,
+                                      }
+                                    : item
+                                )
+                              );
+                            }}
+                          >
+                            {docentes.map((d) => (
+                              <option key={d.id_usuario} value={d.id_usuario}>
+                                {d.nombre} ({d.expediente})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: SOLICITUDES DE EVENTOS Y EVALUACION PREVENTIVA DE EMPALMES */}
       {activeTab === 'eventos' && (
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
@@ -673,21 +1438,82 @@ export default function AdminView({ user, targetTabTrigger }) {
               Catalogo de Espacios Academicos y Niveles de Ocupacion
             </h3>
             <p style={{ color: '#64748B', fontSize: '0.85rem' }}>
-              Monitoreo visual de capacidad y uso de las 12 instalaciones de la Facultad de Informatica.
+              Monitoreo visual de capacidad y uso de las 51 instalaciones de la Facultad de Informatica.
             </p>
           </div>
 
+          {/* Barra de Filtros y Busqueda de Espacios */}
+          <div style={{ background: '#FFFFFF', padding: '14px 18px', borderRadius: '10px', border: '1px solid #E2E8F0', marginBottom: '18px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', marginRight: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <FilterIcon size={14} /> Categoria:
+              </span>
+              {[
+                { key: 'todos', label: `Todos (${espacios.length})` },
+                { key: 'clases', label: `Clases Normales (${espacios.filter(e => (e.categoria || '').includes('clases')).length})` },
+                { key: 'aulas', label: `Aulas (${espacios.filter(e => e.tipo === 'aula').length})` },
+                { key: 'laboratorios', label: `Laboratorios (${espacios.filter(e => e.tipo === 'laboratorio').length})` },
+                { key: 'deportes', label: `Deportes (${espacios.filter(e => (e.categoria || '').includes('deportes')).length})` },
+                { key: 'eventos', label: `Eventos (${espacios.filter(e => (e.categoria || '').includes('eventos')).length})` },
+              ].map((pill) => (
+                <button
+                  key={pill.key}
+                  type="button"
+                  onClick={() => setFiltroCategoriaEspacio(pill.key)}
+                  style={{
+                    fontSize: '0.78rem',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    border: '1px solid',
+                    cursor: 'pointer',
+                    fontWeight: filtroCategoriaEspacio === pill.key ? '700' : '500',
+                    background: filtroCategoriaEspacio === pill.key ? '#0284C7' : '#F8FAFC',
+                    color: filtroCategoriaEspacio === pill.key ? '#FFFFFF' : '#334155',
+                    borderColor: filtroCategoriaEspacio === pill.key ? '#0284C7' : '#CBD5E1',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '240px' }}>
+              <SearchIcon size={16} />
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Buscar espacio (ej. A01, D04, LR1, Coliseo...)"
+                value={busquedaEspacio}
+                onChange={(e) => setBusquedaEspacio(e.target.value)}
+                style={{ fontSize: '0.82rem', padding: '6px 10px' }}
+              />
+              {busquedaEspacio && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setBusquedaEspacio('')}
+                  style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="occupancy-grid">
-            {espacios.map((esp) => {
+            {espaciosFiltrados.map((esp) => {
               const pct = esp.porcentaje_ocupacion || 0;
               let barColor = '#16A34A'; // Verde
               if (pct > 75) barColor = '#DC2626'; // Rojo
               else if (pct > 40) barColor = '#D97706'; // Ambar
 
+              const cats = (esp.categoria || 'clases').split(',').map((c) => c.trim());
+
               return (
                 <div key={esp.id_espacio} className="space-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ fontWeight: '800', fontSize: '1.05rem', color: '#0F172A' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                    <div style={{ fontWeight: '800', fontSize: '1.02rem', color: '#0F172A' }}>
                       {esp.nombre_espacio}
                     </div>
                     <span className="badge badge-normal" style={{ fontSize: '0.68rem', textTransform: 'capitalize' }}>
@@ -695,7 +1521,26 @@ export default function AdminView({ user, targetTabTrigger }) {
                     </span>
                   </div>
 
-                  <div style={{ fontSize: '0.85rem', color: '#64748B', margin: '8px 0 12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {/* Badges de categoria */}
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                    {cats.map((c) => (
+                      <span
+                        key={c}
+                        style={{
+                          fontSize: '0.65rem',
+                          fontWeight: '700',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: c === 'deportes' ? '#DCFCE7' : c === 'eventos' ? '#FEF3C7' : '#E0F2FE',
+                          color: c === 'deportes' ? '#15803D' : c === 'eventos' ? '#B45309' : '#0369A1',
+                        }}
+                      >
+                        {c === 'deportes' ? 'Deportes' : c === 'eventos' ? 'Eventos y Platicas' : 'Clases Normales'}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div style={{ fontSize: '0.85rem', color: '#64748B', margin: '8px 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <UsersIcon size={15} />
                     <span>Capacidad maxima: <strong>{esp.capacidad} personas</strong></span>
                   </div>
