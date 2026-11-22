@@ -14,7 +14,7 @@ Centraliza la gestion de horarios escolares, la actualizacion en tiempo real del
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```text
 Horarios_FIF/
@@ -65,7 +65,7 @@ Horarios_FIF/
 
 ---
 
-## ⚡ Instalacion y Arranque Rapido con Ejecutables (.bat)
+## Instalacion y Arranque Rapido con Ejecutables (.bat)
 
 Para simplificar todo el proceso en Windows, dispones de scripts ejecutables listos para usar con doble clic:
 
@@ -77,7 +77,7 @@ Para simplificar todo el proceso en Windows, dispones de scripts ejecutables lis
 
 ---
 
-## 🚀 Guia de Puesta en Marcha Paso a Paso (Manual)
+## Guia de Puesta en Marcha Paso a Paso (Manual)
 
 ### Paso 1: Configurar la Base de Datos en XAMPP
 
@@ -137,14 +137,14 @@ Para simplificar todo el proceso en Windows, dispones de scripts ejecutables lis
 
 ---
 
-## 📚 Documentacion y Manual de Usuario
+## Documentacion y Manual de Usuario
 
 Para conocer en detalle el funcionamiento del sistema, guias paso a paso para cada rol e imagenes ilustrativas de los flujos de trabajo, consulta el archivo:
-👉 **[MANUAL_DE_USUARIO.md](file:///d:/GitHub/Horarios_FIF/Horarios_FIF/MANUAL_DE_USUARIO.md)**
+**[MANUAL_DE_USUARIO.md](file:///d:/GitHub/Horarios_FIF/Horarios_FIF/MANUAL_DE_USUARIO.md)**
 
 ---
 
-## 🔑 Credenciales de Acceso para Pruebas
+##  Credenciales de Acceso para Pruebas
 
 Todas las cuentas de prueba tienen la misma contraseña predeterminada: `prueba123`.
 
@@ -158,7 +158,7 @@ Todas las cuentas de prueba tienen la misma contraseña predeterminada: `prueba1
 
 ---
 
-## 🛡️ Reglas de Negocio Implementadas
+## Reglas de Negocio Implementadas
 
 1. **Prevencion de Empalmes (Modulo 3):**
    - Al intentar registrar una clase, el sistema valida que no exista empalme de aula ni de docente en el mismo dia y periodo, y que no colisione con ningun evento comunitario aprobado. En caso de traslape, retorna `409 Conflict` con el mensaje explicito del conflicto.
