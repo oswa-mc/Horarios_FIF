@@ -6,7 +6,7 @@ Centraliza la gestion de horarios escolares, la actualizacion en tiempo real del
 
 ---
 
-## 🛠️ Stack Tecnologico
+## Stack Tecnologico
 
 - **Frontend:** React + Vite + CSS institucional (Azul `#2563EB`, fondo `#F4F6FB`, tarjetas redondeadas, tipografia *Inter*).
 - **Backend:** Python + FastAPI + PyJWT + Passlib/Bcrypt (CORS habilitado para `http://localhost:5173`).
