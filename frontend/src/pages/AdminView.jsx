@@ -247,7 +247,7 @@ export default function AdminView({ user, targetTabTrigger }) {
       if (guardarDirecto) {
         setPlanMensaje({
           tipo: 'exito',
-          texto: `Se generaron y aplicaron exitosamente ${res.total_clases_generadas} clases en la base de datos sin ningun empalme.`,
+          texto: `Se generaron y aplicaron exitosamente ${res.total_clases_generadas} clases sin ningun empalme.`,
         });
         const [nuevasClases, nuevosEspacios] = await Promise.all([
           api.getAdminClases(),
@@ -258,7 +258,7 @@ export default function AdminView({ user, targetTabTrigger }) {
       } else {
         setPlanMensaje({
           tipo: 'info',
-          texto: `Propuesta calculada: ${res.total_clases_generadas} clases distribuidas de lunes a jueves en bloques de 2 horas. Revisa la distribucion abajo y haz clic en "Guardar y Aplicar Horario".`,
+          texto: `Propuesta calculada: ${res.total_clases_generadas} clases distribuidas de lunes a jueves en bloques de 2 horas. Revisa la distribucion abajo y haz clic en "Guardar Horario".`,
         });
       }
     } catch (err) {
@@ -295,7 +295,7 @@ export default function AdminView({ user, targetTabTrigger }) {
 
       setPlanMensaje({
         tipo: 'exito',
-        texto: `Horario guardado exitosamente: ${planClasesGeneradas.length} clases sincronizadas en el sistema sin empalmes.`,
+        texto: `Horario guardado exitosamente: ${planClasesGeneradas.length} clases aplicadas sin empalmes.`,
       });
 
       const [nuevasClases, nuevosEspacios] = await Promise.all([
@@ -307,7 +307,7 @@ export default function AdminView({ user, targetTabTrigger }) {
     } catch (err) {
       setPlanMensaje({
         tipo: 'error',
-        texto: err.detail || 'Error al guardar el horario en la base de datos',
+        texto: err.detail || 'Error al guardar el horario',
       });
     } finally {
       setGuardandoPlan(false);
@@ -838,7 +838,7 @@ export default function AdminView({ user, targetTabTrigger }) {
                   onClick={handleLimpiarSemestre}
                   style={{ color: '#DC2626', borderColor: '#FCA5A5' }}
                 >
-                  Limpiar Horario de este Semestre
+                  Limpiar Horario
                 </button>
               </div>
             </div>
@@ -936,7 +936,7 @@ export default function AdminView({ user, targetTabTrigger }) {
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               >
                 <CalendarIcon size={16} />
-                <span>{generandoPlan ? 'Calculando horarios sin empalmes...' : 'Generar Propuesta de Horario'}</span>
+                <span>{generandoPlan ? 'Generando...' : 'Generar Propuesta'}</span>
               </button>
 
               <button
@@ -947,7 +947,7 @@ export default function AdminView({ user, targetTabTrigger }) {
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               >
                 <CheckCircleIcon size={16} />
-                <span>{generandoPlan ? 'Procesando...' : 'Generar y Aplicar a BD Directo'}</span>
+                <span>{generandoPlan ? 'Aplicando...' : 'Generar y Aplicar'}</span>
               </button>
 
               {planClasesGeneradas.length > 0 && (
@@ -959,7 +959,7 @@ export default function AdminView({ user, targetTabTrigger }) {
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#0284C7' }}
                 >
                   <ClipboardCheckIcon size={16} />
-                  <span>{guardandoPlan ? 'Guardando en BD...' : `Guardar ${planClasesGeneradas.length} Clases en Base de Datos`}</span>
+                  <span>{guardandoPlan ? 'Guardando...' : 'Guardar Horario'}</span>
                 </button>
               )}
             </div>
@@ -976,7 +976,7 @@ export default function AdminView({ user, targetTabTrigger }) {
                   Aulas Normales e Innovacion: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'aula').length} materias (teoria, matematicas, gestion)
                 </span>
                 <span style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '6px', background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', fontWeight: '600' }}>
-                  Laboratorios de Computo: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'lab_computo').length} materias (programacion, BD, software)
+                  Laboratorios de Computo: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'lab_computo').length} materias (programacion, software)
                 </span>
                 <span style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '6px', background: '#FAF5FF', color: '#7E22CE', border: '1px solid #E9D5FF', fontWeight: '600' }}>
                   Laboratorios de Redes: {planClasesGeneradas.filter(c => c.tipo_espacio_requerido === 'lab_redes').length} materias (redes, telecomunicaciones)
@@ -1012,7 +1012,7 @@ export default function AdminView({ user, targetTabTrigger }) {
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
                   <CheckCircleIcon size={14} />
-                  <span>Aplicar Horario al Sistema</span>
+                  <span>{guardandoPlan ? 'Guardando...' : 'Aplicar Horario'}</span>
                 </button>
               </div>
 
@@ -1105,7 +1105,7 @@ export default function AdminView({ user, targetTabTrigger }) {
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
                   <CheckCircleIcon size={16} />
-                  <span>Confirmar y Guardar Todo en BD</span>
+                  <span>{guardandoPlan ? 'Guardando...' : 'Guardar Horario'}</span>
                 </button>
               </div>
 

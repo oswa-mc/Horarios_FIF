@@ -297,7 +297,7 @@ def generar_horarios_semestre(payload: GenerarHorarioRequest):
     espacios = query_all("SELECT id_espacio, nombre_espacio, tipo, capacidad, categoria FROM espacio_academico ORDER BY id_espacio ASC")
 
     if not docentes or not espacios:
-        raise HTTPException(status_code=500, detail="No hay docentes o espacios registrados en la base de datos.")
+        raise HTTPException(status_code=500, detail="No hay docentes o espacios registrados disponibles.")
 
     # Ocupacion previa en la base de datos
     clases_existentes = query_all(
@@ -533,7 +533,7 @@ def guardar_horarios_lote(payload: GuardarLoteRequest):
         insertadas += 1
 
     return {
-        "message": f"Se guardaron {insertadas} clases exitosamente en la base de datos",
+        "message": f"Se guardaron {insertadas} clases exitosamente",
         "total_insertadas": insertadas
     }
 
